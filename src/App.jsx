@@ -28,10 +28,9 @@ async function dbUpdate(table, match, data) {
   });
   if (!r.ok) throw new Error(await r.text());
 }
-async function dbUpsert(table, rows) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-    method: "POST", headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify(rows),
+async function dbDelete(table, match) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${match}`, {
+    method: "DELETE", headers: { ...HEADERS, "Prefer": "return=minimal" },
   });
   if (!r.ok) throw new Error(await r.text());
 }
@@ -75,15 +74,6 @@ const INIT_COMPANIES = [
 
 const ADMIN = { login: "admin", password: "admin123" };
 
-const rowToLead = r => ({
-  id: r.id, companyId: r.company_id,
-  firstName: r.first_name, lastName: r.last_name,
-  email: r.email, phone: r.phone,
-  address: r.address, city: r.city, zip: r.zip,
-  message: r.message, campaign: r.campaign,
-  importedAt: r.imported_at,
-  status: r.status || "nouveau", note: r.note || "",
-});
 const leadToRow = l => ({
   id: l.id, company_id: l.companyId,
   first_name: l.firstName, last_name: l.lastName,
@@ -91,7 +81,21 @@ const leadToRow = l => ({
   address: l.address, city: l.city, zip: l.zip,
   message: l.message, campaign: l.campaign,
   imported_at: l.importedAt,
+  import_id: l.importId || null,
+  import_label: l.importLabel || null,
   status: l.status || "nouveau", note: l.note || "",
+});
+
+const rowToLead = r => ({
+  id: r.id, companyId: r.company_id,
+  firstName: r.first_name, lastName: r.last_name,
+  email: r.email, phone: r.phone,
+  address: r.address, city: r.city, zip: r.zip,
+  message: r.message, campaign: r.campaign,
+  importedAt: r.imported_at,
+  importId: r.import_id || null,
+  importLabel: r.import_label || null,
+  status: r.status || "nouveau", note: r.note || "",
 });
 const rowToCompany = r => ({ id: r.id, name: r.name, network: r.network, login: r.login, password: r.password });
 const companyToRow = c => ({ id: c.id, name: c.name, network: c.network, login: c.login, password: c.password });
@@ -398,12 +402,14 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
 
   async function handleFile(e) {
     const f = e.target.files[0]; if (!f || !selId) return;
+    const importId    = "imp_" + Date.now();
+    const importLabel = `${selCo?.name} — ${f.name} — ${new Date().toLocaleString("fr-FR")}`;
     const r = new FileReader();
     r.onload = async ev => {
       const parsed = parseCSV(ev.target.result);
       if (!parsed.length) { setMsg({ type:"error", text:"Fichier invalide ou vide." }); return; }
       setUploading(true);
-      const withCo = parsed.map(l => ({...l, companyId: selId}));
+      const withCo = parsed.map(l => ({...l, companyId: selId, importId, importLabel}));
       try {
         await dbInsert("leads", withCo.map(leadToRow));
         setLeads(prev => [...withCo, ...prev]);
@@ -439,7 +445,7 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
       </div>
       <div style={{ padding:16 }}>
         <div style={{ display:"flex", gap:6, marginBottom:16, borderBottom:"1px solid var(--color-border-tertiary)", paddingBottom:10 }}>
-          {[["import","Importer CSV"],["overview","Vue d'ensemble"],["companies","Sociétés"]].map(([k,l])=>(
+          {[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["companies","Sociétés"]].map(([k,l])=>(
             <button key={k} onClick={()=>setTab(k)} style={{ padding:"6px 16px", borderRadius:8, border:"none", background:tab===k?"var(--color-background-secondary)":"transparent", fontWeight:tab===k?500:400, cursor:"pointer", fontSize:13, color:"var(--color-text-primary)" }}>{l}</button>
           ))}
         </div>
@@ -479,8 +485,67 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
             </button>
           </div>
         )}
-        {tab==="overview" && (
-          <div>
+        {tab==="imports" && (() => {
+          // Group leads by importId
+          const importGroups = {};
+          leads.forEach(l => {
+            if (!l.importId) return;
+            if (!importGroups[l.importId]) importGroups[l.importId] = { id:l.importId, label:l.importLabel, companyId:l.companyId, leads:[] };
+            importGroups[l.importId].leads.push(l);
+          });
+          const groups = Object.values(importGroups).sort((a,b) => b.id.localeCompare(a.id));
+          return (
+            <div>
+              <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:12 }}>
+                {groups.length} import(s) enregistré(s) · Vous pouvez supprimer un import entier en cas d'erreur.
+              </div>
+              {groups.length === 0 && <div style={{ padding:32, textAlign:"center", color:"var(--color-text-secondary)", background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)" }}>Aucun import enregistré.</div>}
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {groups.map(g => {
+                  const co = companies.find(c=>c.id===g.companyId);
+                  const net = co ? NETWORKS[co.network] : NETWORKS.renovation;
+                  const statusCounts = {};
+                  STATUSES.forEach(s => { statusCounts[s.key] = g.leads.filter(l=>l.status===s.key).length; });
+                  return (
+                    <div key={g.id} style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", padding:"12px 16px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8 }}>
+                        <div>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                            <div style={{ width:8, height:8, borderRadius:"50%", background:net.color }}/>
+                            <span style={{ fontWeight:500 }}>{co?.name || "Société inconnue"}</span>
+                            <span style={{ fontSize:11, background:net.light, color:net.color, padding:"1px 7px", borderRadius:9 }}>{g.leads.length} lead{g.leads.length>1?"s":""}</span>
+                          </div>
+                          <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:6 }}>{g.label}</div>
+                          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                            {STATUSES.filter(s=>statusCounts[s.key]>0).map(s=>(
+                              <span key={s.key} style={{ fontSize:11, padding:"1px 8px", borderRadius:8, background:s.bg, color:s.color }}>{statusCounts[s.key]} {s.label}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <button onClick={async () => {
+                          if (!window.confirm(`Supprimer les ${g.leads.length} leads de cet import ?`)) return;
+                          try {
+                            await dbDelete("leads", "import_id=eq."+g.id);
+                            setLeads(prev => prev.filter(l => l.importId !== g.id));
+                            setMsg({ type:"ok", text:`✓ Import supprimé (${g.leads.length} leads retirés).` });
+                          } catch(err) {
+                            setMsg({ type:"error", text:"Erreur suppression : "+err.message });
+                          }
+                        }} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid #F7C1C1", background:"transparent", color:"#A32D2D", fontSize:12, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>
+                          🗑 Supprimer cet import
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {tab==="overview" && (() => {
+          // Build per-company lead activity for admin visu
+          return (
             <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
               <div style={{ flex:1, minWidth:120, background:"var(--color-background-primary)", borderRadius:8, padding:"12px 16px", border:"1px solid var(--color-border-tertiary)" }}>
                 <div style={{ fontSize:26, fontWeight:500, color:"#185FA5" }}>{allStats.total}</div>
