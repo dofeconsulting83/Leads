@@ -438,4 +438,253 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
   }
 
   async function deleteImport(importId, count) {
-    if (!window.confirm(`Supprimer les
+    if (!window.confirm(`Supprimer les ${count} leads de cet import ?`)) return;
+    try {
+      await dbDelete("leads", "import_id=eq."+importId);
+      setLeads(prev => prev.filter(l => l.importId !== importId));
+      setMsg({ type:"ok", text:`✓ Import supprimé (${count} leads retirés).` });
+    } catch(err) {
+      setMsg({ type:"error", text:"Erreur suppression : "+err.message });
+    }
+  }
+
+  const grouped = useMemo(() => {
+    const r = {}; companies.forEach(c => { r[c.id] = leads.filter(l=>l.companyId===c.id); }); return r;
+  }, [leads, companies]);
+
+  const importGroups = useMemo(() => {
+    const g = {};
+    leads.forEach(l => {
+      if (!l.importId) return;
+      if (!g[l.importId]) g[l.importId] = { id:l.importId, label:l.importLabel, companyId:l.companyId, leads:[] };
+      g[l.importId].leads.push(l);
+    });
+    return Object.values(g).sort((a,b) => b.id.localeCompare(a.id));
+  }, [leads]);
+
+  const allStats = useMemo(() => ({
+    total: leads.length,
+    byStatus: STATUSES.map(s => ({...s, count: leads.filter(l=>l.status===s.key).length})),
+  }), [leads]);
+
+  return (
+    <div style={{ minHeight:"100vh", background:"var(--color-background-tertiary)", fontSize:14 }}>
+      <div style={{ background:"var(--color-background-primary)", borderBottom:"1px solid var(--color-border-tertiary)", padding:"12px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ fontWeight:500, fontSize:15 }}>🛠 Administration · Plateforme Leads</div>
+        <button onClick={onLogout} style={{ padding:"6px 12px", borderRadius:8, border:"1px solid var(--color-border-secondary)", background:"transparent", cursor:"pointer", fontSize:12, color:"var(--color-text-secondary)" }}>Déconnexion</button>
+      </div>
+      <div style={{ padding:16 }}>
+        <div style={{ display:"flex", gap:6, marginBottom:16, borderBottom:"1px solid var(--color-border-tertiary)", paddingBottom:10 }}>
+          {[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["companies","Sociétés"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{ padding:"6px 16px", borderRadius:8, border:"none", background:tab===k?"var(--color-background-secondary)":"transparent", fontWeight:tab===k?500:400, cursor:"pointer", fontSize:13, color:"var(--color-text-primary)" }}>{l}</button>
+          ))}
+        </div>
+
+        {msg && (
+          <div style={{ padding:"10px 14px", borderRadius:8, background:msg.type==="ok"?"#EAF3DE":"#FCEBEB", color:msg.type==="ok"?"#27500A":"#791F1F", marginBottom:14, fontSize:13, display:"flex", justifyContent:"space-between" }}>
+            {msg.text}
+            <button onClick={()=>setMsg(null)} style={{ background:"none", border:"none", cursor:"pointer", color:"inherit" }}>✕</button>
+          </div>
+        )}
+
+        {tab==="import" && (
+          <div style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", padding:20 }}>
+            <div style={{ fontWeight:500, marginBottom:14 }}>Importer un fichier CSV Google Ads</div>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, color:"var(--color-text-secondary)", marginBottom:6 }}>Société destinataire</div>
+              {["renovation","humidite"].map(net=>(
+                <div key={net} style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:11, color:NETWORKS[net].color, fontWeight:500, marginBottom:4 }}>{NETWORKS[net].label}</div>
+                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                    {companies.filter(c=>c.network===net).map(c=>(
+                      <button key={c.id} onClick={()=>setSelId(c.id)} style={{ padding:"5px 11px", borderRadius:7, border:`1px solid ${selId===c.id?NETWORKS[net].color:"var(--color-border-secondary)"}`, background:selId===c.id?NETWORKS[net].light:"transparent", color:selId===c.id?NETWORKS[net].color:"var(--color-text-secondary)", fontSize:12, cursor:"pointer", fontWeight:selId===c.id?500:400 }}>{c.name}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {selCo && (
+              <div style={{ background:"var(--color-background-secondary)", borderRadius:8, padding:"10px 14px", marginBottom:14, fontSize:12 }}>
+                Société : <b style={{ color:NETWORKS[selCo.network].color }}>{selCo.name}</b> · {grouped[selCo.id]?.length||0} lead(s) en base
+              </div>
+            )}
+            <div style={{ background:"var(--color-background-secondary)", borderRadius:8, padding:"10px 14px", marginBottom:14, fontSize:12, color:"var(--color-text-secondary)" }}>
+              <b style={{ color:"var(--color-text-primary)" }}>Format Google Ads accepté :</b> Nom complet, N° de téléphone, Code postal, Ville, Nom de la campagne, Phase du lead, Date et heure de l'envoi.
+            </div>
+            <input type="file" accept=".csv" ref={fileRef} onChange={handleFile} style={{ display:"none" }}/>
+            <button onClick={()=>selId&&!uploading&&fileRef.current.click()} style={{ padding:"9px 20px", borderRadius:8, border:"none", background:selCo?NETWORKS[selCo.network].color:"#888", color:"#fff", fontWeight:500, fontSize:14, cursor:selCo&&!uploading?"pointer":"not-allowed", opacity:uploading?0.7:1 }}>
+              {uploading ? "Import en cours…" : "⬆ Choisir le fichier CSV"}
+            </button>
+          </div>
+        )}
+
+        {tab==="imports" && (
+          <div>
+            <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:12 }}>
+              {importGroups.length} import(s) · Supprimez un import entier en cas d'erreur de société.
+            </div>
+            {importGroups.length === 0 && (
+              <div style={{ padding:32, textAlign:"center", color:"var(--color-text-secondary)", background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)" }}>
+                Aucun import enregistré.
+              </div>
+            )}
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {importGroups.map(g => {
+                const co  = companies.find(c=>c.id===g.companyId);
+                const net = co ? NETWORKS[co.network] : NETWORKS.renovation;
+                return (
+                  <div key={g.id} style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", padding:"12px 16px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8 }}>
+                      <div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                          <div style={{ width:8, height:8, borderRadius:"50%", background:net.color }}/>
+                          <span style={{ fontWeight:500 }}>{co?.name || "Société inconnue"}</span>
+                          <span style={{ fontSize:11, background:net.light, color:net.color, padding:"1px 7px", borderRadius:9 }}>{g.leads.length} lead{g.leads.length>1?"s":""}</span>
+                        </div>
+                        <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:6 }}>{g.label}</div>
+                        <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                          {STATUSES.filter(s=>g.leads.some(l=>l.status===s.key)).map(s=>(
+                            <span key={s.key} style={{ fontSize:11, padding:"1px 8px", borderRadius:8, background:s.bg, color:s.color }}>{g.leads.filter(l=>l.status===s.key).length} {s.label}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <button onClick={()=>deleteImport(g.id, g.leads.length)} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid #F7C1C1", background:"transparent", color:"#A32D2D", fontSize:12, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>
+                        🗑 Supprimer
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {tab==="overview" && (
+          <div>
+            <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+              <div style={{ flex:1, minWidth:120, background:"var(--color-background-primary)", borderRadius:8, padding:"12px 16px", border:"1px solid var(--color-border-tertiary)" }}>
+                <div style={{ fontSize:26, fontWeight:500, color:"#185FA5" }}>{allStats.total}</div>
+                <div style={{ fontSize:12, color:"var(--color-text-secondary)" }}>Total leads</div>
+              </div>
+              {allStats.byStatus.map(s => (
+                <div key={s.key} style={{ flex:1, minWidth:100, background:s.bg, borderRadius:8, padding:"12px 16px", border:`1px solid ${s.color}33` }}>
+                  <div style={{ fontSize:22, fontWeight:500, color:s.color }}>{s.count}</div>
+                  <div style={{ fontSize:12, color:s.color }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+            {["renovation","humidite"].map(net=>(
+              <div key={net} style={{ marginBottom:16 }}>
+                <div style={{ fontSize:12, fontWeight:500, color:NETWORKS[net].color, marginBottom:6 }}>{NETWORKS[net].label}</div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))", gap:8 }}>
+                  {companies.filter(c=>c.network===net).map(c=>{
+                    const cl = grouped[c.id]||[];
+                    const nw = cl.filter(l=>l.status==="nouveau").length;
+                    const treated = cl.filter(l=>l.status!=="nouveau").length;
+                    const pct = cl.length > 0 ? Math.round(treated/cl.length*100) : 0;
+                    return (
+                      <div key={c.id} style={{ background:"var(--color-background-primary)", borderRadius:9, border:"1px solid var(--color-border-tertiary)", padding:"11px 14px" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                          <span style={{ fontWeight:500, fontSize:13 }}>{c.name}</span>
+                          {nw>0 && <span style={{ fontSize:10, background:NETWORKS[net].light, color:NETWORKS[net].color, borderRadius:9, padding:"1px 7px", fontWeight:500 }}>{nw} new</span>}
+                        </div>
+                        <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:8 }}>{cl.length} lead{cl.length>1?"s":""} · {pct}% traités</div>
+                        {cl.length > 0 && (
+                          <div style={{ height:6, borderRadius:3, background:"var(--color-border-tertiary)", marginBottom:8, overflow:"hidden" }}>
+                            <div style={{ height:"100%", width:pct+"%", background:NETWORKS[net].color, borderRadius:3 }}/>
+                          </div>
+                        )}
+                        <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+                          {STATUSES.filter(s=>cl.some(l=>l.status===s.key)).map(s=>(
+                            <span key={s.key} style={{ fontSize:10, padding:"1px 6px", borderRadius:6, background:s.bg, color:s.color }}>{cl.filter(l=>l.status===s.key).length} {s.label}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab==="companies" && (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {companies.map(c => {
+              const net = NETWORKS[c.network];
+              return (
+                <div key={c.id} style={{ background:"var(--color-background-primary)", borderRadius:9, border:"1px solid var(--color-border-tertiary)", padding:"11px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:net.color }}/>
+                    <span style={{ fontWeight:500 }}>{c.name}</span>
+                    <span style={{ fontSize:11, background:net.light, color:net.color, padding:"1px 7px", borderRadius:9 }}>{net.label}</span>
+                    <span style={{ fontSize:12, color:"var(--color-text-secondary)" }}>Login : <b>{c.login}</b></span>
+                    {editId===c.id ? (
+                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <input value={editPwd} onChange={e=>setEditPwd(e.target.value)} placeholder="Nouveau mot de passe" style={{ padding:"4px 8px", borderRadius:6, border:"1px solid var(--color-border-secondary)", fontSize:12, background:"var(--color-background-primary)", color:"var(--color-text-primary)", width:160 }}/>
+                        <button onClick={()=>savePassword(c.id,editPwd||c.password)} style={{ padding:"4px 10px", borderRadius:6, border:"none", background:net.color, color:"#fff", fontSize:12, cursor:"pointer" }}>OK</button>
+                        <button onClick={()=>setEditId(null)} style={{ padding:"4px 8px", borderRadius:6, border:"1px solid var(--color-border-secondary)", background:"transparent", fontSize:12, cursor:"pointer", color:"var(--color-text-secondary)" }}>✕</button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize:12, color:"var(--color-text-secondary)" }}>mdp : <b>{c.password}</b></span>
+                    )}
+                  </div>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <span style={{ fontSize:12, color:"var(--color-text-secondary)" }}>{grouped[c.id]?.length||0} leads</span>
+                    <button onClick={()=>{ setEditId(c.id); setEditPwd(c.password); }} style={{ padding:"4px 10px", borderRadius:6, border:"1px solid var(--color-border-secondary)", background:"transparent", fontSize:12, cursor:"pointer", color:"var(--color-text-secondary)" }}>Changer mdp</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [session,   setSession]   = useState(null);
+  const [leads,     setLeads]     = useState([]);
+  const [companies, setCompanies] = useState(INIT_COMPANIES);
+  const [loading,   setLoading]   = useState(true);
+  const [dbError,   setDbError]   = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        await dbUpsert("companies", INIT_COMPANIES.map(companyToRow));
+        const rows = await dbSelect("leads", "order=created_at.desc");
+        if (Array.isArray(rows)) setLeads(rows.map(rowToLead));
+        const cos = await dbSelect("companies");
+        if (Array.isArray(cos) && cos.length > 0) setCompanies(cos.map(rowToCompany));
+      } catch(e) {
+        setDbError(e?.message || "Erreur réseau");
+      }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  if (loading) return (
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--color-background-tertiary)", flexDirection:"column", gap:12 }}>
+      <div style={{ fontSize:28 }}>⏳</div>
+      <div style={{ fontWeight:500 }}>Connexion à la base de données…</div>
+      <div style={{ fontSize:12, color:"var(--color-text-secondary)" }}>Supabase · okbtkvjexxhjmbdmorgg</div>
+    </div>
+  );
+
+  if (dbError) return (
+    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--color-background-tertiary)", flexDirection:"column", gap:12, padding:24 }}>
+      <div style={{ fontSize:28 }}>⚠️</div>
+      <div style={{ fontWeight:500, color:"#A32D2D" }}>Erreur de connexion Supabase</div>
+      <div style={{ fontSize:12, color:"var(--color-text-secondary)" }}>{dbError}</div>
+    </div>
+  );
+
+  if (!session) return <LoginScreen onLogin={setSession} companies={companies}/>;
+  if (session.role === "admin") return <AdminView leads={leads} setLeads={setLeads} companies={companies} setCompanies={setCompanies} onLogout={()=>setSession(null)}/>;
+  const company = companies.find(c => c.id === session.companyId);
+  return <CompanyView company={company} leads={leads} setLeads={setLeads} onLogout={()=>setSession(null)}/>;
+}
