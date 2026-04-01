@@ -34,10 +34,17 @@ async function dbDelete(table, match) {
   });
   if (!r.ok) throw new Error(await r.text());
 }
+async function dbUpsert(table, rows) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST", headers: { ...HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(rows),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
 
 const NETWORKS = {
-  renovation: { label: "Rénovation ATM",  color: "#185FA5", light: "#E6F1FB" },
-  humidite:   { label: "MurHumide",       color: "#0F6E56", light: "#E1F5EE" },
+  renovation: { label: "Rénovation ATM", color: "#185FA5", light: "#E6F1FB" },
+  humidite:   { label: "MurHumide",      color: "#0F6E56", light: "#E1F5EE" },
 };
 
 const STATUSES = [
@@ -74,6 +81,18 @@ const INIT_COMPANIES = [
 
 const ADMIN = { login: "admin", password: "admin123" };
 
+const rowToLead = r => ({
+  id: r.id, companyId: r.company_id,
+  firstName: r.first_name, lastName: r.last_name,
+  email: r.email, phone: r.phone,
+  address: r.address, city: r.city, zip: r.zip,
+  message: r.message, campaign: r.campaign,
+  importedAt: r.imported_at,
+  importId: r.import_id || null,
+  importLabel: r.import_label || null,
+  status: r.status || "nouveau", note: r.note || "",
+});
+
 const leadToRow = l => ({
   id: l.id, company_id: l.companyId,
   first_name: l.firstName, last_name: l.lastName,
@@ -86,17 +105,6 @@ const leadToRow = l => ({
   status: l.status || "nouveau", note: l.note || "",
 });
 
-const rowToLead = r => ({
-  id: r.id, companyId: r.company_id,
-  firstName: r.first_name, lastName: r.last_name,
-  email: r.email, phone: r.phone,
-  address: r.address, city: r.city, zip: r.zip,
-  message: r.message, campaign: r.campaign,
-  importedAt: r.imported_at,
-  importId: r.import_id || null,
-  importLabel: r.import_label || null,
-  status: r.status || "nouveau", note: r.note || "",
-});
 const rowToCompany = r => ({ id: r.id, name: r.name, network: r.network, login: r.login, password: r.password });
 const companyToRow = c => ({ id: c.id, name: c.name, network: c.network, login: c.login, password: c.password });
 
@@ -131,7 +139,7 @@ function parseCSV(text) {
   };
   return lines.slice(1).map((line, i) => {
     const cols = splitLine(line);
-    const g = i => (i >= 0 && i < cols.length) ? cols[i].replace(/^"|"$/g,"").trim() : "";
+    const g = j => (j >= 0 && j < cols.length) ? cols[j].replace(/^"|"$/g,"").trim() : "";
     let fn = g(iFirst) || "", ln = g(iLast) || "";
     if (!fn && !ln && iFullName >= 0) {
       const pts = g(iFullName).trim().split(/\s+/);
@@ -146,6 +154,7 @@ function parseCSV(text) {
       message: g(iMsg), campaign: g(iCampaign),
       importedAt: g(iDate) || new Date().toLocaleString("fr-FR"),
       status: "nouveau", note: "", companyId: null,
+      importId: null, importLabel: null,
     };
   }).filter(Boolean);
 }
@@ -404,8 +413,8 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
     const f = e.target.files[0]; if (!f || !selId) return;
     const importId    = "imp_" + Date.now();
     const importLabel = `${selCo?.name} — ${f.name} — ${new Date().toLocaleString("fr-FR")}`;
-    const r = new FileReader();
-    r.onload = async ev => {
+    const reader = new FileReader();
+    reader.onload = async ev => {
       const parsed = parseCSV(ev.target.result);
       if (!parsed.length) { setMsg({ type:"error", text:"Fichier invalide ou vide." }); return; }
       setUploading(true);
@@ -419,7 +428,7 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
       }
       setUploading(false); e.target.value="";
     };
-    r.readAsText(f, "UTF-8");
+    reader.readAsText(f, "UTF-8");
   }
 
   async function savePassword(coId, pwd) {
@@ -428,239 +437,5 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
     setEditId(null);
   }
 
-  const grouped = useMemo(() => {
-    const r = {}; companies.forEach(c => { r[c.id] = leads.filter(l=>l.companyId===c.id); }); return r;
-  }, [leads, companies]);
-
-  const allStats = useMemo(() => ({
-    total: leads.length,
-    byStatus: STATUSES.map(s => ({...s, count: leads.filter(l=>l.status===s.key).length})),
-  }), [leads]);
-
-  return (
-    <div style={{ minHeight:"100vh", background:"var(--color-background-tertiary)", fontSize:14 }}>
-      <div style={{ background:"var(--color-background-primary)", borderBottom:"1px solid var(--color-border-tertiary)", padding:"12px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <div style={{ fontWeight:500, fontSize:15 }}>🛠 Administration · Plateforme Leads</div>
-        <button onClick={onLogout} style={{ padding:"6px 12px", borderRadius:8, border:"1px solid var(--color-border-secondary)", background:"transparent", cursor:"pointer", fontSize:12, color:"var(--color-text-secondary)" }}>Déconnexion</button>
-      </div>
-      <div style={{ padding:16 }}>
-        <div style={{ display:"flex", gap:6, marginBottom:16, borderBottom:"1px solid var(--color-border-tertiary)", paddingBottom:10 }}>
-          {[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["companies","Sociétés"]].map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)} style={{ padding:"6px 16px", borderRadius:8, border:"none", background:tab===k?"var(--color-background-secondary)":"transparent", fontWeight:tab===k?500:400, cursor:"pointer", fontSize:13, color:"var(--color-text-primary)" }}>{l}</button>
-          ))}
-        </div>
-        {msg && (
-          <div style={{ padding:"10px 14px", borderRadius:8, background:msg.type==="ok"?"#EAF3DE":"#FCEBEB", color:msg.type==="ok"?"#27500A":"#791F1F", marginBottom:14, fontSize:13, display:"flex", justifyContent:"space-between" }}>
-            {msg.text}
-            <button onClick={()=>setMsg(null)} style={{ background:"none", border:"none", cursor:"pointer", color:"inherit" }}>✕</button>
-          </div>
-        )}
-        {tab==="import" && (
-          <div style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", padding:20 }}>
-            <div style={{ fontWeight:500, marginBottom:14 }}>Importer un fichier CSV Google Ads</div>
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:11, color:"var(--color-text-secondary)", marginBottom:6 }}>Société destinataire</div>
-              {["renovation","humidite"].map(net=>(
-                <div key={net} style={{ marginBottom:10 }}>
-                  <div style={{ fontSize:11, color:NETWORKS[net].color, fontWeight:500, marginBottom:4 }}>{NETWORKS[net].label}</div>
-                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                    {companies.filter(c=>c.network===net).map(c=>(
-                      <button key={c.id} onClick={()=>setSelId(c.id)} style={{ padding:"5px 11px", borderRadius:7, border:`1px solid ${selId===c.id?NETWORKS[net].color:"var(--color-border-secondary)"}`, background:selId===c.id?NETWORKS[net].light:"transparent", color:selId===c.id?NETWORKS[net].color:"var(--color-text-secondary)", fontSize:12, cursor:"pointer", fontWeight:selId===c.id?500:400 }}>{c.name}</button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {selCo && (
-              <div style={{ background:"var(--color-background-secondary)", borderRadius:8, padding:"10px 14px", marginBottom:14, fontSize:12 }}>
-                Société : <b style={{ color:NETWORKS[selCo.network].color }}>{selCo.name}</b> · {grouped[selCo.id]?.length||0} lead(s) en base
-              </div>
-            )}
-            <div style={{ background:"var(--color-background-secondary)", borderRadius:8, padding:"10px 14px", marginBottom:14, fontSize:12, color:"var(--color-text-secondary)" }}>
-              <b style={{ color:"var(--color-text-primary)" }}>Format Google Ads accepté :</b> Nom complet, N° de téléphone, Code postal, Ville, Nom de la campagne, Phase du lead, Date et heure de l'envoi.
-            </div>
-            <input type="file" accept=".csv" ref={fileRef} onChange={handleFile} style={{ display:"none" }}/>
-            <button onClick={()=>selId&&!uploading&&fileRef.current.click()} style={{ padding:"9px 20px", borderRadius:8, border:"none", background:selCo?NETWORKS[selCo.network].color:"#888", color:"#fff", fontWeight:500, fontSize:14, cursor:selCo&&!uploading?"pointer":"not-allowed", opacity:uploading?0.7:1 }}>
-              {uploading ? "Import en cours…" : "⬆ Choisir le fichier CSV"}
-            </button>
-          </div>
-        )}
-        {tab==="imports" && (() => {
-          // Group leads by importId
-          const importGroups = {};
-          leads.forEach(l => {
-            if (!l.importId) return;
-            if (!importGroups[l.importId]) importGroups[l.importId] = { id:l.importId, label:l.importLabel, companyId:l.companyId, leads:[] };
-            importGroups[l.importId].leads.push(l);
-          });
-          const groups = Object.values(importGroups).sort((a,b) => b.id.localeCompare(a.id));
-          return (
-            <div>
-              <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:12 }}>
-                {groups.length} import(s) enregistré(s) · Vous pouvez supprimer un import entier en cas d'erreur.
-              </div>
-              {groups.length === 0 && <div style={{ padding:32, textAlign:"center", color:"var(--color-text-secondary)", background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)" }}>Aucun import enregistré.</div>}
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {groups.map(g => {
-                  const co = companies.find(c=>c.id===g.companyId);
-                  const net = co ? NETWORKS[co.network] : NETWORKS.renovation;
-                  const statusCounts = {};
-                  STATUSES.forEach(s => { statusCounts[s.key] = g.leads.filter(l=>l.status===s.key).length; });
-                  return (
-                    <div key={g.id} style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", padding:"12px 16px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8 }}>
-                        <div>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                            <div style={{ width:8, height:8, borderRadius:"50%", background:net.color }}/>
-                            <span style={{ fontWeight:500 }}>{co?.name || "Société inconnue"}</span>
-                            <span style={{ fontSize:11, background:net.light, color:net.color, padding:"1px 7px", borderRadius:9 }}>{g.leads.length} lead{g.leads.length>1?"s":""}</span>
-                          </div>
-                          <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:6 }}>{g.label}</div>
-                          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                            {STATUSES.filter(s=>statusCounts[s.key]>0).map(s=>(
-                              <span key={s.key} style={{ fontSize:11, padding:"1px 8px", borderRadius:8, background:s.bg, color:s.color }}>{statusCounts[s.key]} {s.label}</span>
-                            ))}
-                          </div>
-                        </div>
-                        <button onClick={async () => {
-                          if (!window.confirm(`Supprimer les ${g.leads.length} leads de cet import ?`)) return;
-                          try {
-                            await dbDelete("leads", "import_id=eq."+g.id);
-                            setLeads(prev => prev.filter(l => l.importId !== g.id));
-                            setMsg({ type:"ok", text:`✓ Import supprimé (${g.leads.length} leads retirés).` });
-                          } catch(err) {
-                            setMsg({ type:"error", text:"Erreur suppression : "+err.message });
-                          }
-                        }} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid #F7C1C1", background:"transparent", color:"#A32D2D", fontSize:12, cursor:"pointer", fontWeight:500, whiteSpace:"nowrap" }}>
-                          🗑 Supprimer cet import
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
-
-        {tab==="overview" && (() => {
-          // Build per-company lead activity for admin visu
-          return (
-            <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }}>
-              <div style={{ flex:1, minWidth:120, background:"var(--color-background-primary)", borderRadius:8, padding:"12px 16px", border:"1px solid var(--color-border-tertiary)" }}>
-                <div style={{ fontSize:26, fontWeight:500, color:"#185FA5" }}>{allStats.total}</div>
-                <div style={{ fontSize:12, color:"var(--color-text-secondary)" }}>Total leads</div>
-              </div>
-              {allStats.byStatus.map(s => (
-                <div key={s.key} style={{ flex:1, minWidth:100, background:s.bg, borderRadius:8, padding:"12px 16px", border:`1px solid ${s.color}33` }}>
-                  <div style={{ fontSize:22, fontWeight:500, color:s.color }}>{s.count}</div>
-                  <div style={{ fontSize:12, color:s.color }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-            {["renovation","humidite"].map(net=>(
-              <div key={net} style={{ marginBottom:16 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:NETWORKS[net].color, marginBottom:6 }}>{NETWORKS[net].label}</div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:8 }}>
-                  {companies.filter(c=>c.network===net).map(c=>{
-                    const cl = grouped[c.id]||[]; const nw = cl.filter(l=>l.status==="nouveau").length;
-                    return (
-                      <div key={c.id} style={{ background:"var(--color-background-primary)", borderRadius:9, border:"1px solid var(--color-border-tertiary)", padding:"11px 14px" }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
-                          <span style={{ fontWeight:500, fontSize:13 }}>{c.name}</span>
-                          {nw>0 && <span style={{ fontSize:10, background:NETWORKS[net].light, color:NETWORKS[net].color, borderRadius:9, padding:"1px 7px", fontWeight:500 }}>{nw} new</span>}
-                        </div>
-                        <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:6 }}>{cl.length} lead{cl.length>1?"s":""}</div>
-                        <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-                          {STATUSES.filter(s=>cl.some(l=>l.status===s.key)).map(s=>(
-                            <span key={s.key} style={{ fontSize:10, padding:"1px 6px", borderRadius:6, background:s.bg, color:s.color }}>{cl.filter(l=>l.status===s.key).length} {s.label}</span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {tab==="companies" && (
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {companies.map(c => {
-              const net = NETWORKS[c.network];
-              return (
-                <div key={c.id} style={{ background:"var(--color-background-primary)", borderRadius:9, border:"1px solid var(--color-border-tertiary)", padding:"11px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", background:net.color }}/>
-                    <span style={{ fontWeight:500 }}>{c.name}</span>
-                    <span style={{ fontSize:11, background:net.light, color:net.color, padding:"1px 7px", borderRadius:9 }}>{net.label}</span>
-                    <span style={{ fontSize:12, color:"var(--color-text-secondary)" }}>Login : <b>{c.login}</b></span>
-                    {editId===c.id ? (
-                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                        <input value={editPwd} onChange={e=>setEditPwd(e.target.value)} placeholder="Nouveau mot de passe" style={{ padding:"4px 8px", borderRadius:6, border:"1px solid var(--color-border-secondary)", fontSize:12, background:"var(--color-background-primary)", color:"var(--color-text-primary)", width:160 }}/>
-                        <button onClick={()=>savePassword(c.id,editPwd||c.password)} style={{ padding:"4px 10px", borderRadius:6, border:"none", background:net.color, color:"#fff", fontSize:12, cursor:"pointer" }}>OK</button>
-                        <button onClick={()=>setEditId(null)} style={{ padding:"4px 8px", borderRadius:6, border:"1px solid var(--color-border-secondary)", background:"transparent", fontSize:12, cursor:"pointer", color:"var(--color-text-secondary)" }}>✕</button>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize:12, color:"var(--color-text-secondary)" }}>mdp : <b>{c.password}</b></span>
-                    )}
-                  </div>
-                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                    <span style={{ fontSize:12, color:"var(--color-text-secondary)" }}>{grouped[c.id]?.length||0} leads</span>
-                    <button onClick={()=>{ setEditId(c.id); setEditPwd(c.password); }} style={{ padding:"4px 10px", borderRadius:6, border:"1px solid var(--color-border-secondary)", background:"transparent", fontSize:12, cursor:"pointer", color:"var(--color-text-secondary)" }}>Changer mdp</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function App() {
-  const [session,   setSession]   = useState(null);
-  const [leads,     setLeads]     = useState([]);
-  const [companies, setCompanies] = useState(INIT_COMPANIES);
-  const [loading,   setLoading]   = useState(true);
-  const [dbError,   setDbError]   = useState(null);
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        await dbUpsert("companies", INIT_COMPANIES.map(companyToRow));
-        const rows = await dbSelect("leads", "order=created_at.desc");
-        if (Array.isArray(rows)) setLeads(rows.map(rowToLead));
-        const cos = await dbSelect("companies");
-        if (Array.isArray(cos) && cos.length > 0) setCompanies(cos.map(rowToCompany));
-      } catch(e) {
-        setDbError(e?.message || "Erreur réseau");
-      }
-      setLoading(false);
-    }
-    load();
-  }, []);
-
-  if (loading) return (
-    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--color-background-tertiary)", flexDirection:"column", gap:12 }}>
-      <div style={{ fontSize:28 }}>⏳</div>
-      <div style={{ fontWeight:500 }}>Connexion à la base de données…</div>
-      <div style={{ fontSize:12, color:"var(--color-text-secondary)" }}>Supabase · okbtkvjexxhjmbdmorgg</div>
-    </div>
-  );
-
-  if (dbError) return (
-    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--color-background-tertiary)", flexDirection:"column", gap:12, padding:24 }}>
-      <div style={{ fontSize:28 }}>⚠️</div>
-      <div style={{ fontWeight:500, color:"#A32D2D" }}>Erreur de connexion Supabase</div>
-      <div style={{ fontSize:12, color:"var(--color-text-secondary)" }}>{dbError}</div>
-    </div>
-  );
-
-  if (!session) return <LoginScreen onLogin={setSession} companies={companies}/>;
-  if (session.role === "admin") return <AdminView leads={leads} setLeads={setLeads} companies={companies} setCompanies={setCompanies} onLogout={()=>setSession(null)}/>;
-  const company = companies.find(c => c.id === session.companyId);
-  return <CompanyView company={company} leads={leads} setLeads={setLeads} onLogout={()=>setSession(null)}/>;
-}
+  async function deleteImport(importId, count) {
+    if (!window.confirm(`Supprimer les
