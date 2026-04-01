@@ -278,6 +278,7 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo,   setDateTo]   = useState("");
   const [panel,    setPanel]    = useState(null);
+  const [groupBy,  setGroupBy]  = useState(null); // null | "dept"
 
   const myLeads = useMemo(() => leads.filter(l => l.companyId === company.id), [leads, company.id]);
 
@@ -304,7 +305,18 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
     return r;
   }, [myLeads]);
 
-  async function saveLeadUpdate(id, status, note) {
+  const deptGroups = useMemo(() => {
+    if (groupBy !== "dept") return null;
+    const g = {};
+    shown.forEach(l => {
+      const dept = (l.zip||"00").slice(0,2).toUpperCase();
+      if (!g[dept]) g[dept] = [];
+      g[dept].push(l);
+    });
+    return Object.entries(g).sort((a,b)=>a[0].localeCompare(b[0]));
+  }, [shown, groupBy]);
+
+
     await dbUpdate("leads", "id=eq."+id, { status, note });
     setLeads(prev => prev.map(l => l.id===id ? {...l, status, note} : l));
   }
@@ -342,6 +354,9 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
             <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{ ...inp, flex:1 }}/>
             {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom("");setDateTo("");}} style={{ padding:"5px 8px", borderRadius:6, border:"1px solid var(--color-border-secondary)", background:"transparent", cursor:"pointer", fontSize:12, color:"var(--color-text-secondary)" }}>✕</button>}
           </div>
+          <button onClick={()=>setGroupBy(g=>g==="dept"?null:"dept")} style={{ padding:"6px 12px", borderRadius:8, border:`1px solid ${groupBy==="dept"?net.color:"var(--color-border-secondary)"}`, background:groupBy==="dept"?net.light:"transparent", color:groupBy==="dept"?net.color:"var(--color-text-secondary)", fontSize:12, cursor:"pointer", fontWeight:groupBy==="dept"?500:400, whiteSpace:"nowrap" }}>
+            📍 {groupBy==="dept" ? "Groupé par dpt" : "Grouper par dpt"}
+          </button>
         </div>
         {myLeads.length === 0 ? (
           <div style={{ textAlign:"center", padding:60, background:"var(--color-background-primary)", borderRadius:12, border:"1px solid var(--color-border-tertiary)", color:"var(--color-text-secondary)" }}>
@@ -349,12 +364,52 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
             <div style={{ fontWeight:500, marginBottom:4 }}>Aucun lead pour le moment</div>
             <div style={{ fontSize:13 }}>L'administrateur n'a pas encore importé votre fichier CSV.</div>
           </div>
+        ) : deptGroups ? (
+          // ── VUE GROUPÉE PAR DÉPARTEMENT ──
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            {deptGroups.map(([dept, dLeads]) => (
+              <div key={dept} style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", overflow:"hidden" }}>
+                <div style={{ padding:"10px 14px", background:net.light, borderBottom:"1px solid var(--color-border-tertiary)", display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontWeight:500, color:net.color, fontSize:14 }}>📍 Département {dept}</span>
+                  <span style={{ fontSize:12, background:net.color, color:"#fff", borderRadius:9, padding:"1px 8px" }}>{dLeads.length} lead{dLeads.length>1?"s":""}</span>
+                </div>
+                <table style={{ width:"100%", borderCollapse:"collapse", minWidth:700 }}>
+                  <thead>
+                    <tr style={{ background:"var(--color-background-secondary)", fontSize:11, color:"var(--color-text-secondary)" }}>
+                      {["Contact","Email","Date","Ville","Téléphone","Campagne / Message","Statut","Action"].map(h=>(
+                        <th key={h} style={{ padding:"7px 12px", textAlign:"left", fontWeight:500, borderBottom:"1px solid var(--color-border-tertiary)", whiteSpace:"nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dLeads.map((l,i) => (
+                      <tr key={l.id} style={{ borderBottom:"1px solid var(--color-border-tertiary)", background:i%2===0?"transparent":"var(--color-background-secondary)" }}>
+                        <td style={{ padding:"8px 12px", fontWeight:500 }}>{l.firstName} {l.lastName}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, color:"var(--color-text-secondary)" }}>{l.email ? <a href={`mailto:${l.email}`} style={{ color:net.color, textDecoration:"none" }}>{l.email}</a> : "—"}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, color:"var(--color-text-secondary)", whiteSpace:"nowrap" }}>{fmtDate(l.importedAt)}</td>
+                        <td style={{ padding:"8px 12px", fontSize:13 }}>{l.city||"—"}</td>
+                        <td style={{ padding:"8px 12px", fontSize:13, whiteSpace:"nowrap" }}>{l.phone ? <a href={`tel:${l.phone}`} style={{ color:net.color, textDecoration:"none" }}>{l.phone}</a> : "—"}</td>
+                        <td style={{ padding:"8px 12px", fontSize:12, color:"var(--color-text-secondary)", maxWidth:160 }}>
+                          {l.campaign && <div style={{ fontWeight:500, color:"var(--color-text-primary)", marginBottom:2 }}>{l.campaign}</div>}
+                          {l.message ? `"${l.message.slice(0,50)}…"` : "—"}
+                        </td>
+                        <td style={{ padding:"8px 12px" }}><Badge statusKey={l.status}/></td>
+                        <td style={{ padding:"8px 12px" }}><button onClick={()=>setPanel(l)} style={{ padding:"4px 10px", borderRadius:6, border:`1px solid ${net.color}`, background:"transparent", color:net.color, fontSize:12, cursor:"pointer", fontWeight:500 }}>Gérer</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            {deptGroups.length===0 && <div style={{ padding:24, textAlign:"center", color:"var(--color-text-secondary)", fontSize:13 }}>Aucun lead ne correspond.</div>}
+          </div>
         ) : (
+          // ── VUE TABLEAU NORMAL ──
           <div style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:700 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:800 }}>
               <thead>
                 <tr style={{ background:"var(--color-background-secondary)", fontSize:11, color:"var(--color-text-secondary)" }}>
-                  {["Contact","Date","Ville","Téléphone","Campagne / Message","Statut","Note","Action"].map(h=>(
+                  {["Contact","Email","Date","Ville","Téléphone","Campagne / Message","Statut","Note","Action"].map(h=>(
                     <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontWeight:500, borderBottom:"1px solid var(--color-border-tertiary)", whiteSpace:"nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -364,7 +419,9 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
                   <tr key={l.id} style={{ borderBottom:"1px solid var(--color-border-tertiary)", background:i%2===0?"transparent":"var(--color-background-secondary)" }}>
                     <td style={{ padding:"9px 12px" }}>
                       <div style={{ fontWeight:500 }}>{l.firstName} {l.lastName}</div>
-                      <div style={{ fontSize:11, color:"var(--color-text-secondary)" }}>{l.email}</div>
+                    </td>
+                    <td style={{ padding:"9px 12px", fontSize:12 }}>
+                      {l.email ? <a href={`mailto:${l.email}`} style={{ color:net.color, textDecoration:"none" }}>{l.email}</a> : <span style={{ color:"var(--color-text-tertiary)" }}>—</span>}
                     </td>
                     <td style={{ padding:"9px 12px", fontSize:12, color:"var(--color-text-secondary)", whiteSpace:"nowrap" }}>
                       {fmtDate(l.importedAt)}
@@ -387,7 +444,7 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
                     </td>
                   </tr>
                 ))}
-                {shown.length===0 && <tr><td colSpan={8} style={{ padding:24, textAlign:"center", color:"var(--color-text-secondary)", fontSize:13 }}>Aucun lead ne correspond.</td></tr>}
+                {shown.length===0 && <tr><td colSpan={9} style={{ padding:24, textAlign:"center", color:"var(--color-text-secondary)", fontSize:13 }}>Aucun lead ne correspond.</td></tr>}
               </tbody>
             </table>
           </div>
