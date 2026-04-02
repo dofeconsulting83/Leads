@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 
 const SUPABASE_URL  = "https://okbtkvjexxhjmbdmorgg.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rYnRrdmpleHhoam1iZG1vcmdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1Mjk3MzcsImV4cCI6MjA5MDEwNTczN30.vCPz-5Kj3F-NdFnw27T06qU4uhuYkGSPxUeC8S9o8dQ";
@@ -200,11 +200,13 @@ function exportCSV(leads, name) {
   a.click();
 }
 
-function Badge(props) {
-  var s = STATUSES.find(function(x) { return x.key === props.statusKey; }) || STATUSES[0];
-  return React.createElement("span", {
-    style: { fontSize:11, padding:"2px 9px", borderRadius:10, background:s.bg, color:s.color, fontWeight:500, whiteSpace:"nowrap" }
-  }, s.label);
+function Badge({ statusKey }) {
+  var s = STATUSES.find(function(x) { return x.key === statusKey; }) || STATUSES[0];
+  return (
+    <span style={{ fontSize:11, padding:"2px 9px", borderRadius:10, background:s.bg, color:s.color, fontWeight:500, whiteSpace:"nowrap" }}>
+      {s.label}
+    </span>
+  );
 }
 
 function fmtDate(str) {
