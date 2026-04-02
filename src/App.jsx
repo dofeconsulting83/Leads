@@ -408,6 +408,7 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
   const [dateTo,      setDateTo]   = useState("");
   const [panel,       setPanel]    = useState(null);
   const [groupByDept, setGroupByDept] = useState(false);
+  const [sortDesc,    setSortDesc] = useState(true);
 
   const myLeads = useMemo(function() {
     return leads.filter(function(l) { return l.companyId === company.id; });
@@ -422,7 +423,7 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
   }
 
   const shown = useMemo(function() {
-    return myLeads.filter(function(l) {
+    var filtered = myLeads.filter(function(l) {
       var matchStatus = filter === "tous" || l.status === filter;
       var q = search.toLowerCase();
       var matchSearch = !q || [l.firstName,l.lastName,l.email,l.phone,l.city,l.message,l.campaign].some(function(v){return (v||"").toLowerCase().includes(q);});
@@ -431,7 +432,13 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
       var matchTo   = !dateTo   || !lDate || lDate <= new Date(dateTo+"T23:59:59");
       return matchStatus && matchSearch && matchFrom && matchTo;
     });
-  }, [myLeads, filter, search, dateFrom, dateTo]);
+    filtered.sort(function(a, b) {
+      var da = parseLeadDate(a.importedAt) || new Date(0);
+      var db = parseLeadDate(b.importedAt) || new Date(0);
+      return sortDesc ? db - da : da - db;
+    });
+    return filtered;
+  }, [myLeads, filter, search, dateFrom, dateTo, sortDesc]);
 
   const counts = useMemo(function() {
     var r = { tous: myLeads.length };
@@ -493,7 +500,7 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
             <div style={{ fontSize:13 }}>L'administrateur n'a pas encore importé votre fichier CSV.</div>
           </div>
         ) : (
-          <LeadsTable shown={shown} net={net} onPanel={function(l){setPanel(l);}} groupByDept={groupByDept}/>
+          <LeadsTable shown={shown} net={net} onPanel={function(l){setPanel(l);}} groupByDept={groupByDept} sortDesc={sortDesc} onToggleSort={function(){setSortDesc(function(v){return !v;});}} />
         )}
       </div>
 
