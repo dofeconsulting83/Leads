@@ -399,10 +399,39 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
     reader.onload=async function(ev){
       var parsed=parseCSV(ev.target.result);
       if(!parsed.length){setMsg({type:"error",text:"Fichier invalide ou vide."});return;}
+
+      // Dédoublonnage : on récupère les leads déjà en base pour cette société
+      var existing=leads.filter(function(l){ return l.companyId===selId; });
+      var existingKeys={};
+      existing.forEach(function(l){
+        if(l.phone) existingKeys[l.phone.replace(/\s/g,"")]=true;
+        if(l.email) existingKeys[l.email.toLowerCase().trim()]=true;
+      });
+
+      var newLeads=parsed.filter(function(l){
+        var phone=(l.phone||"").replace(/\s/g,"");
+        var email=(l.email||"").toLowerCase().trim();
+        if(phone&&existingKeys[phone]) return false;
+        if(email&&existingKeys[email]) return false;
+        return true;
+      });
+
+      var skipped=parsed.length-newLeads.length;
+      if(!newLeads.length){
+        setMsg({type:"ok",text:"✓ Aucun nouveau lead à importer ("+skipped+" déjà présent"+(skipped>1?"s":"")+" en base)."});
+        e.target.value=""; return;
+      }
+
       setUploading(true);
-      var withCo=parsed.map(function(l){ return Object.assign({},l,{companyId:selId,importId:importId,importLabel:importLabel}); });
-      try { await dbInsert("leads",withCo.map(leadToRow)); setLeads(function(prev){ return withCo.concat(prev); }); setMsg({type:"ok",text:"✓ "+parsed.length+" lead(s) importé(s) pour "+(selCo?selCo.name:"")+"."}); }
-      catch(err){ setMsg({type:"error",text:"Erreur import : "+err.message}); }
+      var withCo=newLeads.map(function(l){ return Object.assign({},l,{companyId:selId,importId:importId,importLabel:importLabel}); });
+      try {
+        await dbInsert("leads",withCo.map(leadToRow));
+        setLeads(function(prev){ return withCo.concat(prev); });
+        var msg="✓ "+newLeads.length+" nouveau"+(newLeads.length>1?"x":"")+" lead"+(newLeads.length>1?"s":"")+" importé"+(newLeads.length>1?"s":"")+" pour "+(selCo?selCo.name:"");
+        if(skipped>0) msg+=" · "+skipped+" doublon"+(skipped>1?"s":"")+" ignoré"+(skipped>1?"s":"");
+        msg+=".";
+        setMsg({type:"ok",text:msg});
+      } catch(err){ setMsg({type:"error",text:"Erreur import : "+err.message}); }
       setUploading(false); e.target.value="";
     };
     reader.readAsText(f,"UTF-8");
