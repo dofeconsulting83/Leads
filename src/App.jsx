@@ -21,7 +21,10 @@ async function dbDelete(table, match) {
   var r = await fetch(SUPABASE_URL + "/rest/v1/" + table + "?" + match, { method: "DELETE", headers: Object.assign({}, HEADERS, { "Prefer": "return=minimal" }) });
   if (!r.ok) throw new Error(await r.text());
 }
-async function dbUpsert(table, rows) {
+async function dbInsertOne(table, row) {
+  var r = await fetch(SUPABASE_URL + "/rest/v1/" + table, { method: "POST", headers: Object.assign({}, HEADERS, { "Prefer": "return=minimal" }), body: JSON.stringify(row) });
+  if (!r.ok) throw new Error(await r.text());
+}
   var r = await fetch(SUPABASE_URL + "/rest/v1/" + table, { method: "POST", headers: Object.assign({}, HEADERS, { "Prefer": "resolution=merge-duplicates,return=minimal" }), body: JSON.stringify(rows) });
   if (!r.ok) throw new Error(await r.text());
 }
@@ -138,7 +141,16 @@ function LoginScreen({ onLogin, companies }) {
   function submit() {
     if (login===ADMIN.login&&pass===ADMIN.password) { onLogin({role:"admin"}); return; }
     var co=companies.find(function(c){ return c.login===login&&c.password===pass; });
-    if (co) { onLogin({role:"company",companyId:co.id}); return; }
+    if (co) {
+      // Enregistrer la connexion
+      dbInsertOne("login_history", {
+        id: "lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
+        company_id: co.id,
+        company_name: co.name,
+      }).catch(function(){});
+      onLogin({role:"company",companyId:co.id});
+      return;
+    }
     setErr("Identifiants incorrects.");
   }
   return (
@@ -304,6 +316,8 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
   var [dateFrom,setDateFrom]=useState(""), [dateTo,setDateTo]=useState("");
   var [panel,setPanel]=useState(null), [groupByDept,setGroupByDept]=useState(false);
   var [sortDesc,setSortDesc]=useState(true);
+  var [page,setPage]=useState(1);
+  var PAGE_SIZE=20;
 
   var myLeads = useMemo(function(){ return leads.filter(function(l){ return l.companyId===company.id; }); }, [leads,company.id]);
 
@@ -389,6 +403,13 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
   var [selId,setSelId]=useState(companies[0]?companies[0].id:""), [msg,setMsg]=useState(null);
   var [tab,setTab]=useState("import"), [editId,setEditId]=useState(null), [editPwd,setEditPwd]=useState("");
   var [uploading,setUploading]=useState(false);
+  var [loginHistory,setLoginHistory]=useState([]);
+
+  useEffect(function(){
+    dbSelect("login_history","order=login_at.desc&limit=200")
+      .then(function(rows){ if(Array.isArray(rows)) setLoginHistory(rows); })
+      .catch(function(){});
+  },[]);
   var selCo=companies.find(function(c){ return c.id===selId; });
 
   async function handleFile(e) {
@@ -465,7 +486,7 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
       </div>
       <div style={{ padding:16 }}>
         <div style={{ display:"flex", gap:6, marginBottom:16, borderBottom:"1px solid var(--color-border-tertiary)", paddingBottom:10 }}>
-          {[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["companies","Sociétés"]].map(function(item){
+          {[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["connexions","Connexions"],["companies","Sociétés"]].map(function(item){
             return <button key={item[0]} onClick={function(){setTab(item[0]);}} style={{ padding:"6px 16px", borderRadius:8, border:"none", background:tab===item[0]?"var(--color-background-secondary)":"transparent", fontWeight:tab===item[0]?500:400, cursor:"pointer", fontSize:13, color:"var(--color-text-primary)" }}>{item[1]}</button>;
           })}
         </div>
@@ -569,6 +590,80 @@ function AdminView({ leads, setLeads, companies, setCompanies, onLogout }) {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {tab==="connexions"&&(
+          <div>
+            <div style={{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:12 }}>{loginHistory.length} connexion(s) enregistrée(s)</div>
+
+            {/* Résumé par société */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:8, marginBottom:20 }}>
+              {companies.map(function(c){
+                var net=NETWORKS[c.network];
+                var history=loginHistory.filter(function(h){ return h.company_id===c.id; });
+                var last=history[0];
+                var lastDate=last?new Date(last.login_at):null;
+                var daysSince=lastDate?Math.floor((Date.now()-lastDate)/86400000):null;
+                var color=daysSince===null?"#9c9a94":daysSince===0?"#27500A":daysSince<=3?"#633806":"#A32D2D";
+                var bg=daysSince===null?"#f5f5f3":daysSince===0?"#EAF3DE":daysSince<=3?"#FAEEDA":"#FCEBEB";
+                return (
+                  <div key={c.id} style={{ background:"var(--color-background-primary)", borderRadius:9, border:"1px solid var(--color-border-tertiary)", padding:"10px 14px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                      <div style={{ width:7, height:7, borderRadius:"50%", background:net.color }}/>
+                      <span style={{ fontWeight:500, fontSize:13 }}>{c.name}</span>
+                    </div>
+                    <div style={{ fontSize:11, padding:"2px 8px", borderRadius:8, background:bg, color:color, display:"inline-block", marginBottom:4, fontWeight:500 }}>
+                      {daysSince===null?"Jamais connecté":daysSince===0?"Connecté aujourd'hui":daysSince===1?"Il y a 1 jour":"Il y a "+daysSince+" jours"}
+                    </div>
+                    <div style={{ fontSize:11, color:"var(--color-text-tertiary)" }}>
+                      {history.length} connexion{history.length>1?"s":""}
+                      {lastDate?" · "+lastDate.toLocaleDateString("fr-FR")+" "+lastDate.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Journal détaillé */}
+            <div style={{ fontWeight:500, fontSize:13, marginBottom:10 }}>Journal détaillé</div>
+            {loginHistory.length===0&&<div style={{ padding:24, textAlign:"center", color:"var(--color-text-secondary)", background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)" }}>Aucune connexion enregistrée.</div>}
+            {loginHistory.length>0&&(
+              <div style={{ background:"var(--color-background-primary)", borderRadius:10, border:"1px solid var(--color-border-tertiary)", overflow:"hidden" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                  <thead>
+                    <tr style={{ background:"var(--color-background-secondary)", fontSize:11, color:"var(--color-text-secondary)" }}>
+                      {["Société","Réseau","Date et heure"].map(function(h){
+                        return <th key={h} style={{ padding:"8px 14px", textAlign:"left", fontWeight:500, borderBottom:"1px solid var(--color-border-tertiary)" }}>{h}</th>;
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loginHistory.map(function(h, i){
+                      var co=companies.find(function(c){ return c.id===h.company_id; });
+                      var net=co?NETWORKS[co.network]:NETWORKS.renovation;
+                      var d=new Date(h.login_at);
+                      return (
+                        <tr key={h.id} style={{ borderBottom:"1px solid var(--color-border-tertiary)", background:i%2===0?"transparent":"var(--color-background-secondary)" }}>
+                          <td style={{ padding:"9px 14px", fontWeight:500 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                              <div style={{ width:7, height:7, borderRadius:"50%", background:net.color }}/>
+                              {h.company_name||"—"}
+                            </div>
+                          </td>
+                          <td style={{ padding:"9px 14px" }}>
+                            <span style={{ fontSize:11, background:net.light, color:net.color, padding:"1px 7px", borderRadius:9 }}>{net.label}</span>
+                          </td>
+                          <td style={{ padding:"9px 14px", fontSize:13, color:"var(--color-text-secondary)" }}>
+                            {d.toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})} à {d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
