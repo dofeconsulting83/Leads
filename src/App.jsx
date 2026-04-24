@@ -316,8 +316,6 @@ function CompanyView({ company, leads, setLeads, onLogout }) {
   var [dateFrom,setDateFrom]=useState(""), [dateTo,setDateTo]=useState("");
   var [panel,setPanel]=useState(null), [groupByDept,setGroupByDept]=useState(false);
   var [sortDesc,setSortDesc]=useState(true);
-  var [page,setPage]=useState(1);
-  var PAGE_SIZE=20;
 
   var myLeads = useMemo(function(){ return leads.filter(function(l){ return l.companyId===company.id; }); }, [leads,company.id]);
 
