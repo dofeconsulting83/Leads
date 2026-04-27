@@ -246,8 +246,8 @@ function LoginScreen(props) {
   }
   return React.createElement("div", { style:{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--color-background-tertiary)" } },
     React.createElement("div", { style:{ background:"var(--color-background-primary)", borderRadius:14, border:"1px solid var(--color-border-tertiary)", width:380, padding:28 } },
-      React.createElement("div", { style:{ fontWeight:500, fontSize:17, marginBottom:2 } }, "Plateforme Leads"),
-      React.createElement("div", { style:{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:20 } }, "ATM Rénovation · MurHumide"),
+     React.createElement("div",{style:{fontWeight:500,fontSize:17,marginBottom:2}},"Formulaire de prospects"),
+React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:20}},"Google Ads"),
       React.createElement("div", { style:{ marginBottom:10 } },
         React.createElement("div", { style:{ fontSize:11, color:"var(--color-text-secondary)", marginBottom:4 } }, "Identifiant"),
         React.createElement("input", { value:login, onChange:function(e){setLogin(e.target.value);}, placeholder:"ex: atm83", style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"}) })
