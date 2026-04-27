@@ -5,13 +5,36 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const HEADERS = { "apikey": SUPABASE_ANON, "Authorization": "Bearer " + SUPABASE_ANON, "Content-Type": "application/json" };
 
 async function dbSelect(table, query) {
-  var r = await fetch(SUPABASE_URL + "/rest/v1/" + table + "?" + (query || ""), { headers: HEADERS });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  // Supabase limite à 1000 par défaut — on pagine pour tout récupérer
+  var allRows = [];
+  var offset = 0;
+  var pageSize = 1000;
+  while (true) {
+    var q = (query || "") + "&limit=" + pageSize + "&offset=" + offset;
+    var r = await fetch(SUPABASE_URL + "/rest/v1/" + table + "?" + q, {
+      headers: Object.assign({}, HEADERS, { "Prefer": "count=none" })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    var rows = await r.json();
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    allRows = allRows.concat(rows);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allRows;
 }
 async function dbInsert(table, rows) {
-  var r = await fetch(SUPABASE_URL + "/rest/v1/" + table, { method: "POST", headers: Object.assign({}, HEADERS, { "Prefer": "return=minimal" }), body: JSON.stringify(rows) });
-  if (!r.ok) throw new Error(await r.text());
+  // Insérer par lots de 500 pour éviter les timeouts sur gros fichiers
+  var batchSize = 500;
+  for (var i = 0; i < rows.length; i += batchSize) {
+    var batch = rows.slice(i, i + batchSize);
+    var r = await fetch(SUPABASE_URL + "/rest/v1/" + table, {
+      method: "POST",
+      headers: Object.assign({}, HEADERS, { "Prefer": "return=minimal" }),
+      body: JSON.stringify(batch)
+    });
+    if (!r.ok) throw new Error(await r.text());
+  }
 }
 async function dbInsertOne(table, row) {
   var r = await fetch(SUPABASE_URL + "/rest/v1/" + table, { method: "POST", headers: Object.assign({}, HEADERS, { "Prefer": "return=minimal" }), body: JSON.stringify(row) });
@@ -462,9 +485,26 @@ function AdminView(props) {
     var f=e.target.files[0]; if(!f||!selId) return;
     var importId="imp_"+Date.now();
     var importLabel=(selCo?selCo.name:"")+" — "+f.name+" — "+new Date().toLocaleString("fr-FR");
-    var reader=new FileReader();
-    reader.onload=async function(ev){
-      var result=parseAutoCSV(ev.target.result);
+
+    // Essayer d'abord UTF-8, puis CP1252 si le résultat semble mal encodé
+    function readWithEncoding(encoding) {
+      return new Promise(function(resolve, reject) {
+        var reader=new FileReader();
+        reader.onload=function(ev){ resolve(ev.target.result); };
+        reader.onerror=reject;
+        reader.readAsText(f, encoding);
+      });
+    }
+
+    try {
+      // Lire en UTF-8 d'abord
+      var text = await readWithEncoding("UTF-8");
+      // Vérifier si le texte semble mal encodé (caractères de remplacement)
+      if (text.includes("\uFFFD") || (text.includes("Activity") && text.includes("�"))) {
+        text = await readWithEncoding("windows-1252");
+      }
+
+      var result=parseAutoCSV(text);
       var parsed=result.leads, format=result.format;
       if(!parsed.length){setMsg({type:"error",text:"Fichier invalide ou vide."});return;}
       var existing=leads.filter(function(l){return l.companyId===selId;});
@@ -489,8 +529,9 @@ function AdminView(props) {
         setMsg({type:"ok",text:txt+"."});
       } catch(err){setMsg({type:"error",text:"Erreur import : "+err.message});}
       setUploading(false); e.target.value="";
-    };
-    reader.readAsText(f,"UTF-8");
+    } catch(err) {
+      setMsg({type:"error",text:"Erreur lecture fichier : "+err.message});
+    }
   }
 
   async function savePassword(coId,pwd){
