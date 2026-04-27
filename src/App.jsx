@@ -827,11 +827,17 @@ export default function App() {
     async function load(){
       setLoading(true);
       try{
-        await dbUpsert("companies",INIT_COMPANIES.map(companyToRow));
+        // Ne plus écraser Supabase — juste lire
         var rows=await dbSelect("leads","order=created_at.desc");
         if(Array.isArray(rows))setLeads(rows.map(rowToLead));
         var cos=await dbSelect("companies");
-        if(Array.isArray(cos)&&cos.length>0)setCompanies(cos.map(rowToCompany));
+        if(Array.isArray(cos)&&cos.length>0){
+          setCompanies(cos.map(rowToCompany));
+        } else {
+          // Premier démarrage : insérer les sociétés initiales
+          await dbUpsert("companies",INIT_COMPANIES.map(companyToRow));
+          setCompanies(INIT_COMPANIES);
+        }
       }catch(e){setDbError(e&&e.message?e.message:"Erreur réseau");}
       setLoading(false);
     }
