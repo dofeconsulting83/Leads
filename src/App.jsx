@@ -397,7 +397,7 @@ function CompanyView(props) {
     var filtered=myLeads.filter(function(l){
       var matchStatus=filter==="tous"||l.status===filter;
       var q=search.toLowerCase();
-      var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.message,l.campaign].some(function(v){return (v||"").toLowerCase().includes(q);});
+      var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.zip,l.message,l.campaign].some(function(v){return (v||"").toLowerCase().includes(q);});
       var lDate=parseLeadDate(l.importedAt);
       var matchFrom=!dateFrom||!lDate||lDate>=new Date(dateFrom);
       var matchTo=!dateTo||!lDate||lDate<=new Date(dateTo+"T23:59:59");
