@@ -246,8 +246,8 @@ function LoginScreen(props) {
   }
   return React.createElement("div", { style:{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"var(--color-background-tertiary)" } },
     React.createElement("div", { style:{ background:"var(--color-background-primary)", borderRadius:14, border:"1px solid var(--color-border-tertiary)", width:380, padding:28 } },
-     React.createElement("div",{style:{fontWeight:500,fontSize:17,marginBottom:2}},"Formulaire de prospects"),
-React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:20}},"Google Ads"),
+      React.createElement("div", { style:{ fontWeight:500, fontSize:17, marginBottom:2 } }, "Plateforme Leads"),
+      React.createElement("div", { style:{ fontSize:12, color:"var(--color-text-secondary)", marginBottom:20 } }, "ATM Rénovation · MurHumide"),
       React.createElement("div", { style:{ marginBottom:10 } },
         React.createElement("div", { style:{ fontSize:11, color:"var(--color-text-secondary)", marginBottom:4 } }, "Identifiant"),
         React.createElement("input", { value:login, onChange:function(e){setLogin(e.target.value);}, placeholder:"ex: atm83", style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"}) })
@@ -820,7 +820,18 @@ function AdminView(props) {
 }
 
 export default function App() {
-  var [session,setSession]=useState(null), [leads,setLeads]=useState([]);
+  var [session,setSession]=useState(function(){
+    try { var s=sessionStorage.getItem("leads_session"); return s?JSON.parse(s):null; } catch(e){ return null; }
+  });
+
+  function handleLogin(s) {
+    setSession(s);
+    try { sessionStorage.setItem("leads_session", JSON.stringify(s)); } catch(e){}
+  }
+  function handleLogout() {
+    setSession(null);
+    try { sessionStorage.removeItem("leads_session"); } catch(e){}
+  }
   var [companies,setCompanies]=useState(INIT_COMPANIES), [loading,setLoading]=useState(true), [dbError,setDbError]=useState(null);
 
   useEffect(function(){
@@ -854,8 +865,8 @@ export default function App() {
     React.createElement("div",{style:{fontWeight:500,color:"#A32D2D"}},"Erreur de connexion Supabase"),
     React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},dbError)
   );
-  if(!session)return React.createElement(LoginScreen,{onLogin:function(s){setSession(s);},companies:companies});
-  if(session.role==="admin")return React.createElement(AdminView,{leads:leads,setLeads:setLeads,companies:companies,setCompanies:setCompanies,onLogout:function(){setSession(null);}});
+  if(!session)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies});
+  if(session.role==="admin")return React.createElement(AdminView,{leads:leads,setLeads:setLeads,companies:companies,setCompanies:setCompanies,onLogout:handleLogout});
   var company=companies.find(function(c){return c.id===session.companyId;});
-  return React.createElement(CompanyView,{company:company,leads:leads,setLeads:setLeads,onLogout:function(){setSession(null);}});
+  return React.createElement(CompanyView,{company:company,leads:leads,setLeads:setLeads,onLogout:handleLogout});
 }
