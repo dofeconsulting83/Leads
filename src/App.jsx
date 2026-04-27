@@ -62,7 +62,8 @@ var STATUSES = [
   { key: "contacte", label: "Contacté",   bg: "#FAEEDA", color: "#633806" },
   { key: "rappeler", label: "À rappeler", bg: "#EEEDFE", color: "#3C3489" },
   { key: "gagne",    label: "Gagné",      bg: "#EAF3DE", color: "#27500A" },
-  { key: "perdu",    label: "Perdu",      bg: "#FCEBEB", color: "#791F1F" }
+  { key: "perdu",    label: "Perdu",      bg: "#FCEBEB", color: "#791F1F" },
+  { key: "spam",     label: "Spam",       bg: "#F0F0F0", color: "#666666" }
 ];
 var INIT_COMPANIES = [
   { id:"c1",  name:"Atriome", network:"renovation", login:"atriome", password:"1234" },
@@ -395,7 +396,8 @@ function CompanyView(props) {
 
   var shown = useMemo(function(){
     var filtered=myLeads.filter(function(l){
-      var matchStatus=filter==="tous"||l.status===filter;
+      // Le filtre "tous" exclut le spam par défaut
+      var matchStatus = filter==="spam" ? l.status==="spam" : filter==="tous" ? l.status!=="spam" : l.status===filter;
       var q=search.toLowerCase();
       var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.zip,l.message,l.campaign].some(function(v){return (v||"").toLowerCase().includes(q);});
       var lDate=parseLeadDate(l.importedAt);
