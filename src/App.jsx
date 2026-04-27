@@ -96,6 +96,7 @@ function fmtTime(str) {
   return m ? m[1] + ":" + m[2] : "";
 }
 
+// Parser format Google Ads (standard)
 function parseCSV(text) {
   var clean = text.replace(/^\uFEFF/, "");
   var lines = clean.trim().split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
@@ -121,6 +122,58 @@ function parseCSV(text) {
     if (!fn&&!g(iPhone)&&!g(iEmail)) return null;
     return { id:"l_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6), firstName:fn||"—", lastName:ln, email:g(iEmail), phone:g(iPhone), address:g(iAddr), city:g(iCity), zip:g(iZip), message:g(iMsg), campaign:g(iCampaign), importedAt:g(iDate)||new Date().toLocaleString("fr-FR"), status:"nouveau", note:"", companyId:null, importId:null, importLabel:null };
   }).filter(Boolean);
+}
+
+// Détection format MH59 / contacts entreprises (colonnes : Activity;Nom;Adresse;Code postal;Ville;Téléphone;Mobile;Mail...)
+function isContactFormat(headers) {
+  return headers.some(function(h){ return h.includes("activity")||h.includes("siren")||h.includes("siret")||h.includes("naf"); });
+}
+function parseContactCSV(text) {
+  // Gère encodage CP1252 / ISO-8859 via remplacement basique
+  var clean = text.replace(/^\uFEFF/, "");
+  var lines = clean.trim().split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+  if (lines.length < 2) return [];
+  var sep = ";";
+  function norm(s) { return s.replace(/^"|"$/g,"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g," ").trim(); }
+  var headers = lines[0].split(sep).map(norm);
+  function idx() { var keys=Array.prototype.slice.call(arguments); return headers.findIndex(function(h){ return keys.some(function(k){ return h.includes(k); }); }); }
+  var iNom=idx("nom"), iAddr=idx("addresse","adresse","address"), iZip=idx("code postal","postal","cp");
+  var iCity=idx("ville","city"), iPhone=idx("telephone"), iMobile=idx("mobile"), iEmail=idx("mail","email");
+  var iActivity=idx("activity","activit");
+  function splitLine(line) {
+    var res=[], cur="", inQ=false;
+    for (var ci=0; ci<line.length; ci++) { var ch=line[ci]; if(ch==='"'){inQ=!inQ;continue;} if(ch===sep&&!inQ){res.push(cur.trim());cur="";continue;} cur+=ch; }
+    res.push(cur.trim()); return res;
+  }
+  return lines.slice(1).map(function(line, i) {
+    var cols=splitLine(line);
+    function g(j){ return (j>=0&&j<cols.length)?cols[j].replace(/^"|"$/g,"").trim():""; }
+    var nom=g(iNom)||"—";
+    var phone=g(iMobile)||g(iPhone); // priorité mobile
+    var email=g(iEmail);
+    var city=g(iCity), zip=g(iZip), addr=g(iAddr);
+    var activity=g(iActivity);
+    if(!nom&&!phone&&!email) return null;
+    return {
+      id:"l_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6),
+      firstName:nom, lastName:"",
+      email:email, phone:phone,
+      address:addr, city:city, zip:zip,
+      message:activity?"Activité : "+activity:"",
+      campaign:"Import contact entreprise",
+      importedAt:new Date().toLocaleString("fr-FR"),
+      status:"nouveau", note:"", companyId:null, importId:null, importLabel:null
+    };
+  }).filter(Boolean);
+}
+
+// Auto-détection du format CSV
+function parseAutoCSV(text) {
+  var clean = text.replace(/^\uFEFF/, "");
+  var firstLine = (clean.split(/\r?\n/)[0]||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  var headers = firstLine.split(";").map(function(h){ return h.replace(/^"|"$/g,"").trim(); });
+  if (isContactFormat(headers)) return { leads: parseContactCSV(text), format: "contact" };
+  return { leads: parseCSV(text), format: "googleads" };
 }
 
 function exportCSV(leads, name) {
@@ -411,7 +464,8 @@ function AdminView(props) {
     var importLabel=(selCo?selCo.name:"")+" — "+f.name+" — "+new Date().toLocaleString("fr-FR");
     var reader=new FileReader();
     reader.onload=async function(ev){
-      var parsed=parseCSV(ev.target.result);
+      var result=parseAutoCSV(ev.target.result);
+      var parsed=result.leads, format=result.format;
       if(!parsed.length){setMsg({type:"error",text:"Fichier invalide ou vide."});return;}
       var existing=leads.filter(function(l){return l.companyId===selId;});
       var existingKeys={};
@@ -429,7 +483,8 @@ function AdminView(props) {
       try {
         await dbInsert("leads",withCo.map(leadToRow));
         setLeads(function(prev){return withCo.concat(prev);});
-        var txt="✓ "+newLeads.length+" nouveau"+(newLeads.length>1?"x":"")+" lead"+(newLeads.length>1?"s":"")+" importé"+(newLeads.length>1?"s":"")+" pour "+(selCo?selCo.name:"");
+        var formatLabel=format==="contact"?" (format contacts entreprises)":"";
+        var txt="✓ "+newLeads.length+" nouveau"+(newLeads.length>1?"x":"")+" lead"+(newLeads.length>1?"s":"")+" importé"+(newLeads.length>1?"s":"")+formatLabel+" pour "+(selCo?selCo.name:"");
         if(skipped>0)txt+=" · "+skipped+" doublon"+(skipped>1?"s":"")+" ignoré"+(skipped>1?"s":"");
         setMsg({type:"ok",text:txt+"."});
       } catch(err){setMsg({type:"error",text:"Erreur import : "+err.message});}
@@ -525,13 +580,82 @@ function AdminView(props) {
 
       // ── VUE D'ENSEMBLE ──
       tab==="overview"&&React.createElement("div",null,
-        React.createElement("div",{style:{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}},
+        // Totaux globaux
+        React.createElement("div",{style:{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}},
           React.createElement("div",{style:{flex:1,minWidth:120,background:"var(--color-background-primary)",borderRadius:8,padding:"12px 16px",border:"1px solid var(--color-border-tertiary)"}},
             React.createElement("div",{style:{fontSize:26,fontWeight:500,color:"#185FA5"}},allStats.total),
             React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Total leads")
           ),
           allStats.byStatus.map(function(s){return React.createElement("div",{key:s.key,style:{flex:1,minWidth:100,background:s.bg,borderRadius:8,padding:"12px 16px",border:"1px solid "+s.color+"33"}},React.createElement("div",{style:{fontSize:22,fontWeight:500,color:s.color}},s.count),React.createElement("div",{style:{fontSize:12,color:s.color}},s.label));})
         ),
+
+        // Tableau leads par société par mois
+        React.createElement("div",{style:{marginBottom:20}},
+          React.createElement("div",{style:{fontWeight:500,fontSize:14,marginBottom:12}},"Leads par société par mois"),
+          (function(){
+            // Construire la liste des 6 derniers mois
+            var months=[];
+            for(var i=5;i>=0;i--){
+              var d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-i);
+              months.push({ key:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"), label:d.toLocaleDateString("fr-FR",{month:"short",year:"numeric"}) });
+            }
+            // Pour chaque lead, trouver son mois
+            function getMonth(l){
+              var d=parseLeadDate(l.importedAt); if(!d)return null;
+              return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+            }
+            return React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+              React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:500}},
+                React.createElement("thead",null,
+                  React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+                    React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},"Société"),
+                    React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},"Réseau"),
+                    months.map(function(m){return React.createElement("th",{key:m.key,style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},m.label);}),
+                    React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},"Total")
+                  )
+                ),
+                React.createElement("tbody",null,
+                  companies.map(function(c,ci){
+                    var net=NETWORKS[c.network];
+                    var cl=grouped[c.id]||[];
+                    var monthlyCounts=months.map(function(m){ return cl.filter(function(l){return getMonth(l)===m.key;}).length; });
+                    var total=cl.length;
+                    return React.createElement("tr",{key:c.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:ci%2===0?"transparent":"var(--color-background-secondary)"}},
+                      React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},
+                        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                          React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),
+                          c.name
+                        )
+                      ),
+                      React.createElement("td",{style:{padding:"9px 14px"}},
+                        React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)
+                      ),
+                      monthlyCounts.map(function(count,mi){
+                        return React.createElement("td",{key:months[mi].key,style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:count>0?500:400,color:count>0?net.color:"var(--color-text-tertiary)"}},count>0?count:"—");
+                      }),
+                      React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:500,color:"#185FA5"}},total||"—")
+                    );
+                  }),
+                  // Ligne totaux
+                  React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontWeight:500,borderTop:"2px solid var(--color-border-secondary)"}},
+                    React.createElement("td",{style:{padding:"9px 14px",fontSize:13,fontWeight:500}},"TOTAL"),
+                    React.createElement("td",{style:{padding:"9px 14px"}}),
+                    months.map(function(m){
+                      var total=leads.filter(function(l){
+                        var d=parseLeadDate(l.importedAt); if(!d)return false;
+                        return (d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"))===m.key;
+                      }).length;
+                      return React.createElement("td",{key:m.key,style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:500,color:"#185FA5"}},total||"—");
+                    }),
+                    React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:500,color:"#185FA5"}},leads.length||"—")
+                  )
+                )
+              )
+            );
+          })()
+        ),
+
+        // Cartes par réseau
         ["renovation","humidite"].map(function(nk){
           return React.createElement("div",{key:nk,style:{marginBottom:16}},
             React.createElement("div",{style:{fontSize:12,fontWeight:500,color:NETWORKS[nk].color,marginBottom:6}},NETWORKS[nk].label),
