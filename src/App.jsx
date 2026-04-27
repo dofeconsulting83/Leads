@@ -54,8 +54,8 @@ async function dbUpsert(table, rows) {
 }
 
 var NETWORKS = {
-  renovation: { label: "Rénovation ATM", color: "#185FA5", light: "#E6F1FB" },
-  humidite:   { label: "MurHumide",      color: "#0F6E56", light: "#E1F5EE" }
+  renovation: { label: "Atriome", color: "#185FA5", light: "#E6F1FB" },
+  humidite:   { label: "MurHumide", color: "#0F6E56", light: "#E1F5EE" }
 };
 var STATUSES = [
   { key: "nouveau",  label: "Nouveau",    bg: "#E6F1FB", color: "#0C447C" },
@@ -769,29 +769,51 @@ function AdminView(props) {
       ),
 
       // ── SOCIÉTÉS ──
-      tab==="companies"&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
-        companies.map(function(c){
-          var net=NETWORKS[c.network];
-          return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"11px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}},
-            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
-              React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),
-              React.createElement("span",{style:{fontWeight:500}},c.name),
-              React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label),
-              React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Login : ",React.createElement("b",null,c.login)),
-              editId===c.id
-                ? React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
-                    React.createElement("input",{value:editPwd,onChange:function(e){setEditPwd(e.target.value);},placeholder:"Nouveau mot de passe",style:{padding:"4px 8px",borderRadius:6,border:"1px solid var(--color-border-secondary)",fontSize:12,background:"var(--color-background-primary)",color:"var(--color-text-primary)",width:160}}),
-                    React.createElement("button",{onClick:function(){savePassword(c.id,editPwd||c.password);},style:{padding:"4px 10px",borderRadius:6,border:"none",background:net.color,color:"#fff",fontSize:12,cursor:"pointer"}},"OK"),
-                    React.createElement("button",{onClick:function(){setEditId(null);},style:{padding:"4px 8px",borderRadius:6,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"✕")
-                  )
-                : React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"mdp : ",React.createElement("b",null,c.password))
-            ),
-            React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
-              React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},(grouped[c.id]||[]).length+" leads"),
-              React.createElement("button",{onClick:function(){setEditId(c.id);setEditPwd(c.password);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Changer mdp")
-            )
-          );
-        })
+      tab==="companies"&&React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},"Cliquez sur \"Modifier\" pour changer le mot de passe d'une société."),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          companies.map(function(c){
+            var net=NETWORKS[c.network];
+            var isEdit=editId===c.id;
+            return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid "+(isEdit?net.color:"var(--color-border-tertiary)"),padding:"12px 16px",transition:"border-color .2s"}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}},
+                // Infos société
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+                  React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),
+                  React.createElement("span",{style:{fontWeight:500,fontSize:14}},c.name),
+                  React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label),
+                  React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Login : ",React.createElement("b",null,c.login))
+                ),
+                // Actions
+                React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+                  React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},(grouped[c.id]||[]).length+" leads"),
+                  isEdit
+                    ? React.createElement("button",{onClick:function(){setEditId(null);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Annuler")
+                    : React.createElement("button",{onClick:function(){setEditId(c.id);setEditPwd(c.password);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"✏ Modifier mdp")
+                )
+              ),
+              // Formulaire édition (visible si isEdit)
+              isEdit&&React.createElement("div",{style:{marginTop:12,padding:"12px 14px",background:"var(--color-background-secondary)",borderRadius:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+                React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Mot de passe actuel : ",React.createElement("b",null,c.password)),
+                React.createElement("div",{style:{width:1,height:20,background:"var(--color-border-secondary)"}}),
+                React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Nouveau :"),
+                React.createElement("input",{
+                  value:editPwd,
+                  onChange:function(e){setEditPwd(e.target.value);},
+                  onKeyDown:function(e){if(e.key==="Enter"&&editPwd)savePassword(c.id,editPwd);},
+                  placeholder:"Saisir le nouveau mot de passe",
+                  autoFocus:true,
+                  style:{padding:"6px 10px",borderRadius:7,border:"1px solid "+net.color,fontSize:13,background:"var(--color-background-primary)",color:"var(--color-text-primary)",flex:1,minWidth:180,outline:"none"}
+                }),
+                React.createElement("button",{
+                  onClick:function(){if(editPwd)savePassword(c.id,editPwd);},
+                  disabled:!editPwd,
+                  style:{padding:"6px 16px",borderRadius:7,border:"none",background:editPwd?net.color:"#ccc",color:"#fff",fontWeight:500,fontSize:13,cursor:editPwd?"pointer":"not-allowed",whiteSpace:"nowrap"}
+                },"✓ Enregistrer")
+              )
+            );
+          })
+        )
       )
     )
   );
