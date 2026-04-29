@@ -26,7 +26,7 @@ export default async function handler(req, res) {
           email: "service.administratif@dofe-consulting.com",
         },
         to: [{ email: companyEmail, name: companyName }],
-        subject: `🔔 ${count} Formulaire${count > 1 ? "s" : ""} de prospects Google ont été importés sur l'application`,
+        subject: `🔔 ${count} Formulaire${count > 1 ? "s" : ""} de prospect${count > 1 ? "s" : ""} Google ${count > 1 ? "ont" : "a"} été importé${count > 1 ? "s" : ""} dans l'application`,
         htmlContent: `
           <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
             <div style="background: #185FA5; padding: 20px 24px; border-radius: 10px 10px 0 0;">
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
             <div style="background: #f9f9f9; padding: 24px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
               <p style="font-size: 15px; color: #1a1a18;">Bonjour <b>${companyName}</b>,</p>
               <p style="font-size: 15px; color: #1a1a18;">
-                <b style="color: #185FA5; font-size: 18px;">${count} formulaire${count > 1 ? "s" : ""} de prospects Google</b> ont été importés sur l'application.
+                <b style="color: #185FA5; font-size: 18px;">${count} formulaire${count > 1 ? "s" : ""} de prospect${count > 1 ? "s" : ""} Google</b> ${count > 1 ? "ont" : "a"} été importé${count > 1 ? "s" : ""} dans l'application.
               </p>
               <div style="text-align: center; margin: 28px 0;">
                 <a href="https://leads-coral.vercel.app" style="background: #185FA5; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px;">
