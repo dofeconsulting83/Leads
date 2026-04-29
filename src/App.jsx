@@ -81,8 +81,8 @@ var PAGE_SIZE = 20;
 
 function rowToLead(r) { return { id:r.id, companyId:r.company_id, firstName:r.first_name, lastName:r.last_name, email:r.email, phone:r.phone, address:r.address, city:r.city, zip:r.zip, message:r.message, campaign:r.campaign, importedAt:r.imported_at, importId:r.import_id||null, importLabel:r.import_label||null, status:r.status||"nouveau", note:r.note||"" }; }
 function leadToRow(l) { return { id:l.id, company_id:l.companyId, first_name:l.firstName, last_name:l.lastName, email:l.email, phone:l.phone, address:l.address, city:l.city, zip:l.zip, message:l.message, campaign:l.campaign, imported_at:l.importedAt, import_id:l.importId||null, import_label:l.importLabel||null, status:l.status||"nouveau", note:l.note||"" }; }
-function rowToCompany(r) { return { id:r.id, name:r.name, network:r.network, login:r.login, password:r.password }; }
-function companyToRow(c) { return { id:c.id, name:c.name, network:c.network, login:c.login, password:c.password }; }
+function rowToCompany(r) { return { id:r.id, name:r.name, network:r.network, login:r.login, password:r.password, email:r.email||"" }; }
+function companyToRow(c) { return { id:c.id, name:c.name, network:c.network, login:c.login, password:c.password, email:c.email||"" }; }
 
 function parseLeadDate(str) {
   if (!str) return null;
@@ -403,6 +403,14 @@ function AdminView(props){
         var txt="✓ "+newLeads.length+" nouveau"+(newLeads.length>1?"x":"")+" lead"+(newLeads.length>1?"s":"")+" importé"+(newLeads.length>1?"s":"")+formatLabel+" pour "+(selCo?selCo.name:"");
         if(skipped>0)txt+=" · "+skipped+" doublon"+(skipped>1?"s":"")+" ignoré"+(skipped>1?"s":"");
         setMsg({type:"ok",text:txt+"."});
+        // Envoyer notification email si la société a un email
+        if(selCo&&selCo.email){
+          fetch("/api/notify",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({companyName:selCo.name,companyEmail:selCo.email,count:newLeads.length})
+          }).catch(function(){});
+        }
       }catch(err){setMsg({type:"error",text:"Erreur import : "+err.message});}
       setUploading(false);e.target.value="";
     }catch(err){setMsg({type:"error",text:"Erreur lecture : "+err.message});}
