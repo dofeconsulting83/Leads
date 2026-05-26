@@ -43,9 +43,10 @@ async function dbUpsert(table, rows) {
 }
 
 var NETWORKS = {
-  renovation: { label: "Atriome",    color: "#185FA5", light: "#E6F1FB" },
-  humidite:   { label: "MurHumide",  color: "#0F6E56", light: "#E1F5EE" }
+  renovation: { label: "Atriome",   color: "#185FA5", light: "#E6F1FB" },
+  humidite:   { label: "MurHumide", color: "#0F6E56", light: "#E1F5EE" }
 };
+
 var STATUSES = [
   { key: "nouveau",  label: "Nouveau",    bg: "#E6F1FB", color: "#0C447C" },
   { key: "contacte", label: "Contacté",   bg: "#FAEEDA", color: "#633806" },
@@ -54,27 +55,44 @@ var STATUSES = [
   { key: "perdu",    label: "Perdu",      bg: "#FCEBEB", color: "#791F1F" },
   { key: "spam",     label: "Spam",       bg: "#F0F0F0", color: "#666666" }
 ];
+
+var CUSTOM_STATUSES = {
+  "c2": [
+    { key: "nouveau",     label: "Nouveau",      bg: "#E6F1FB", color: "#0C447C" },
+    { key: "contacte",    label: "Contacté",     bg: "#FAEEDA", color: "#633806" },
+    { key: "rappeler",    label: "À rappeler",   bg: "#EEEDFE", color: "#3C3489" },
+    { key: "rendezvous",  label: "Rendez-vous",  bg: "#E6F9F1", color: "#0F6E56" },
+    { key: "signe",       label: "Signé",        bg: "#EAF3DE", color: "#27500A" },
+    { key: "perdu",       label: "Perdu",        bg: "#FCEBEB", color: "#791F1F" },
+    { key: "spam",        label: "Spam",         bg: "#F0F0F0", color: "#666666" }
+  ]
+};
+
+function getStatuses(companyId) {
+  return CUSTOM_STATUSES[companyId] || STATUSES;
+}
+
 var INIT_COMPANIES = [
-  { id:"c2",  name:"13 ATM",  network:"renovation", login:"atm13",  password:"1234" },
-  { id:"c3",  name:"14 ATM",  network:"renovation", login:"atm14",  password:"1234" },
-  { id:"c4",  name:"35 ATM",  network:"renovation", login:"atm35",  password:"1234" },
-  { id:"c5",  name:"52 ATM",  network:"renovation", login:"atm52",  password:"1234" },
-  { id:"c6",  name:"56 ATM",  network:"renovation", login:"atm56",  password:"1234" },
-  { id:"c7",  name:"60 ATM",  network:"renovation", login:"atm60",  password:"1234" },
-  { id:"c8",  name:"69 ATM",  network:"renovation", login:"atm69",  password:"1234" },
-  { id:"c9",  name:"78 ATM",  network:"renovation", login:"atm78",  password:"1234" },
-  { id:"c10", name:"83 ATM",  network:"renovation", login:"atm83",  password:"1234" },
-  { id:"c11", name:"84 ATM",  network:"renovation", login:"atm84",  password:"1234" },
-  { id:"c12", name:"94 ATM",  network:"renovation", login:"atm94",  password:"1234" },
-  { id:"c13", name:"95 ATMR", network:"renovation", login:"atmr95", password:"1234" },
-  { id:"c14", name:"30 MH",   network:"humidite",   login:"mh30",   password:"1234" },
-  { id:"c15", name:"44 MH",   network:"humidite",   login:"mh44",   password:"1234" },
-  { id:"c16", name:"56 MH",   network:"humidite",   login:"mh56",   password:"1234" },
-  { id:"c17", name:"59 MH",   network:"humidite",   login:"mh59",   password:"1234" },
-  { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   password:"1234" },
-  { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"1234" },
-  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"1234" },
-  { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234" }
+  { id:"c2",  name:"13 ATM",  network:"renovation", login:"atm13",  password:"1234", email:"13atm@atriome.fr" },
+  { id:"c3",  name:"14 ATM",  network:"renovation", login:"atm14",  password:"1234", email:"14atm@atriome.fr" },
+  { id:"c4",  name:"35 ATM",  network:"renovation", login:"atm35",  password:"1234", email:"35atm@atriome.fr" },
+  { id:"c5",  name:"52 ATM",  network:"renovation", login:"atm52",  password:"1234", email:"52atm@atriome.fr" },
+  { id:"c6",  name:"56 ATM",  network:"renovation", login:"atm56",  password:"1234", email:"56atm@atriome.fr" },
+  { id:"c7",  name:"60 ATM",  network:"renovation", login:"atm60",  password:"1234", email:"60atm@atriome.fr" },
+  { id:"c8",  name:"69 ATM",  network:"renovation", login:"atm69",  password:"1234", email:"69atm@atriome.fr" },
+  { id:"c9",  name:"78 ATM",  network:"renovation", login:"atm78",  password:"1234", email:"78atm@atriome.fr" },
+  { id:"c10", name:"83 ATM",  network:"renovation", login:"atm83",  password:"1234", email:"83atm@atriome.fr" },
+  { id:"c11", name:"84 ATM",  network:"renovation", login:"atm84",  password:"1234", email:"84atm@atriome.fr" },
+  { id:"c12", name:"94 ATM",  network:"renovation", login:"atm94",  password:"1234", email:"94atm@atriome.fr" },
+  { id:"c13", name:"95 ATMR", network:"renovation", login:"atmr95", password:"1234", email:"sebastien.d@atriome.fr" },
+  { id:"c14", name:"30 MH",   network:"humidite",   login:"mh30",   password:"1234", email:"30mh@murhumide.fr" },
+  { id:"c15", name:"44 MH",   network:"humidite",   login:"mh44",   password:"1234", email:"demande@44mh.fr" },
+  { id:"c16", name:"56 MH",   network:"humidite",   login:"mh56",   password:"1234", email:"sas56mh@gmail.com" },
+  { id:"c17", name:"59 MH",   network:"humidite",   login:"mh59",   password:"1234", email:"prospect@murhumide.fr" },
+  { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   password:"1234", email:"" },
+  { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"1234", email:"normandie@murhumide.fr" },
+  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"1234", email:"cyril.blin@murhumide.fr" },
+  { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" }
 ];
 var ADMIN = { login: "admin", password: "admin123" };
 var PAGE_SIZE = 20;
@@ -167,7 +185,8 @@ function exportCSV(leads,name){
 var inp={padding:"7px 10px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"var(--color-background-primary)",color:"var(--color-text-primary)",fontSize:13};
 
 function Badge(props){
-  var s=STATUSES.find(function(x){return x.key===props.statusKey;})||STATUSES[0];
+  var statuses=getStatuses(props.companyId);
+  var s=statuses.find(function(x){return x.key===props.statusKey;})||STATUSES[0];
   return React.createElement("span",{style:{fontSize:11,padding:"2px 9px",borderRadius:10,background:s.bg,color:s.color,fontWeight:500,whiteSpace:"nowrap"}},s.label);
 }
 
@@ -186,14 +205,11 @@ function Pagination(props){
 
 function LoginScreen(props){
   var onLogin=props.onLogin,companies=props.companies;
-  var [login,setLogin]=useState(""), [pass,setPass]=useState(""), [err,setErr]=useState("");
+  var [login,setLogin]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState("");
   function submit(){
     if(login===ADMIN.login&&pass===ADMIN.password){onLogin({role:"admin"});return;}
     var co=companies.find(function(c){return c.login===login&&c.password===pass;});
-    if(co){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name}).catch(function(){});
-      onLogin({role:"company",companyId:co.id});return;
-    }
+    if(co){dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name}).catch(function(){});onLogin({role:"company",companyId:co.id});return;}
     setErr("Identifiants incorrects.");
   }
   return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--color-background-tertiary)"}},
@@ -215,7 +231,8 @@ function LoginScreen(props){
 }
 
 function LeadPanel(props){
-  var lead=props.lead,onClose=props.onClose,onSave=props.onSave,color=props.color;
+  var lead=props.lead,onClose=props.onClose,onSave=props.onSave,color=props.color,companyId=props.companyId;
+  var statuses=getStatuses(companyId);
   var [status,setStatus]=useState(lead.status),[note,setNote]=useState(lead.note||"");
   var items=[["📧 Email",lead.email||"—"],["📞 Téléphone",lead.phone||"—"],["📍 Ville",lead.city||(lead.zip?"CP "+lead.zip:"—")],["📅 Reçu le",fmtDate(lead.importedAt)]];
   return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(2px)"}},
@@ -233,7 +250,7 @@ function LeadPanel(props){
         React.createElement("div",{style:{marginBottom:12}},
           React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:6}},"Statut"),
           React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-            STATUSES.map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setStatus(s.key);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(status===s.key?s.color:"#d0d0cc"),background:status===s.key?s.bg:"transparent",color:status===s.key?s.color:"#6b6b67",fontSize:12,cursor:"pointer",fontWeight:status===s.key?500:400}},s.label);})
+            statuses.map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setStatus(s.key);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(status===s.key?s.color:"#d0d0cc"),background:status===s.key?s.bg:"transparent",color:status===s.key?s.color:"#6b6b67",fontSize:12,cursor:"pointer",fontWeight:status===s.key?500:400}},s.label);})
           )
         ),
         React.createElement("div",{style:{marginBottom:16}},
@@ -250,7 +267,7 @@ function LeadPanel(props){
 }
 
 function LeadsTable(props){
-  var leads=props.leads,net=props.net,onPanel=props.onPanel,groupByDept=props.groupByDept,sortDesc=props.sortDesc,onToggleSort=props.onToggleSort;
+  var leads=props.leads,net=props.net,onPanel=props.onPanel,groupByDept=props.groupByDept,sortDesc=props.sortDesc,onToggleSort=props.onToggleSort,companyId=props.companyId;
   function renderRow(l,i){
     return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},
       React.createElement("td",{style:{padding:"9px 12px",minWidth:120}},React.createElement("div",{style:{fontWeight:500}},l.firstName+" "+l.lastName)),
@@ -259,7 +276,7 @@ function LeadsTable(props){
       React.createElement("td",{style:{padding:"9px 12px",fontSize:13,width:90,maxWidth:100}},React.createElement("div",{style:{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},l.city||"—"),l.zip?React.createElement("span",{style:{fontSize:11,color:"var(--color-text-secondary)"}},l.zip):null),
       React.createElement("td",{style:{padding:"9px 12px",fontSize:13,whiteSpace:"nowrap"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
       React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:180}},l.campaign&&React.createElement("div",{style:{fontWeight:500,color:"var(--color-text-primary)",marginBottom:2}},l.campaign),l.message?'"'+l.message.slice(0,60)+(l.message.length>60?"…":"")+'"':"—"),
-      React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status})),
+      React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:companyId})),
       React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:140}},l.note?l.note.slice(0,50)+(l.note.length>50?"…":""):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),
       React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){onPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"Gérer"))
     );
@@ -291,6 +308,7 @@ function LeadsTable(props){
 function CompanyView(props){
   var company=props.company,leads=props.leads,setLeads=props.setLeads,onLogout=props.onLogout;
   var net=NETWORKS[company.network];
+  var statuses=getStatuses(company.id);
   var [filter,setFilter]=useState("tous"),[search,setSearch]=useState("");
   var [dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState("");
   var [panel,setPanel]=useState(null),[groupByDept,setGroupByDept]=useState(false);
@@ -316,7 +334,7 @@ function CompanyView(props){
 
   var totalPages=Math.max(1,Math.ceil(shown.length/PAGE_SIZE));
   var paginated=shown.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
-  var counts=useMemo(function(){var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};STATUSES.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});return r;},[myLeads]);
+  var counts=useMemo(function(){var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};statuses.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});return r;},[myLeads,statuses]);
 
   async function saveLeadUpdate(id,status,note){
     await dbUpdate("leads","id=eq."+id,{status:status,note:note});
@@ -339,7 +357,7 @@ function CompanyView(props){
     React.createElement("div",{style:{padding:16}},
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
         React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
-        STATUSES.map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");})
+        statuses.map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");})
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
         React.createElement("input",{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:"Rechercher par nom, email, ville, CP, campagne...",style:Object.assign({},inp,{flex:2,minWidth:200})}),
@@ -355,11 +373,11 @@ function CompanyView(props){
       myLeads.length===0
         ?React.createElement("div",{style:{textAlign:"center",padding:60,background:"var(--color-background-primary)",borderRadius:12,border:"1px solid var(--color-border-tertiary)",color:"var(--color-text-secondary)"}},React.createElement("div",{style:{fontSize:32,marginBottom:10}},"📭"),React.createElement("div",{style:{fontWeight:500,marginBottom:4}},"Aucun lead pour le moment"),React.createElement("div",{style:{fontSize:13}},"L'administrateur n'a pas encore importé votre fichier CSV."))
         :React.createElement(React.Fragment,null,
-            React.createElement(LeadsTable,{leads:paginated,net:net,onPanel:function(l){setPanel(l);},groupByDept:groupByDept,sortDesc:sortDesc,onToggleSort:function(){setSortDesc(function(v){return!v;});}}),
+            React.createElement(LeadsTable,{leads:paginated,net:net,companyId:company.id,onPanel:function(l){setPanel(l);},groupByDept:groupByDept,sortDesc:sortDesc,onToggleSort:function(){setSortDesc(function(v){return!v;});}}),
             React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:changePage,color:net.color})
           )
     ),
-    panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
+    panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:company.id,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
   );
 }
 
@@ -403,13 +421,8 @@ function AdminView(props){
         var txt="✓ "+newLeads.length+" nouveau"+(newLeads.length>1?"x":"")+" lead"+(newLeads.length>1?"s":"")+" importé"+(newLeads.length>1?"s":"")+formatLabel+" pour "+(selCo?selCo.name:"");
         if(skipped>0)txt+=" · "+skipped+" doublon"+(skipped>1?"s":"")+" ignoré"+(skipped>1?"s":"");
         setMsg({type:"ok",text:txt+"."});
-        // Envoyer notification email si la société a un email
         if(selCo&&selCo.email){
-          fetch("/api/notify",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({companyName:selCo.name,companyEmail:selCo.email,count:newLeads.length})
-          }).catch(function(){});
+          fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:selCo.name,companyEmail:selCo.email,count:newLeads.length})}).catch(function(){});
         }
       }catch(err){setMsg({type:"error",text:"Erreur import : "+err.message});}
       setUploading(false);e.target.value="";
@@ -430,7 +443,6 @@ function AdminView(props){
   var grouped=useMemo(function(){var r={};companies.forEach(function(c){r[c.id]=leads.filter(function(l){return l.companyId===c.id;});});return r;},[leads,companies]);
   var importGroups=useMemo(function(){var g={};leads.forEach(function(l){if(!l.importId)return;if(!g[l.importId])g[l.importId]={id:l.importId,label:l.importLabel,companyId:l.companyId,leads:[]};g[l.importId].leads.push(l);});return Object.values(g).sort(function(a,b){return b.id.localeCompare(a.id);});},[leads]);
   var allStats=useMemo(function(){return{total:leads.length,byStatus:STATUSES.map(function(s){return Object.assign({},s,{count:leads.filter(function(l){return l.status===s.key;}).length});})};},[leads]);
-
   var tabs=[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["connexions","Connexions"],["companies","Sociétés"]];
 
   return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
@@ -451,7 +463,7 @@ function AdminView(props){
           ["renovation","humidite"].map(function(nk){return React.createElement("div",{key:nk,style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:NETWORKS[nk].color,fontWeight:500,marginBottom:4}},NETWORKS[nk].label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},companies.filter(function(c){return c.network===nk;}).map(function(c){return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"5px 11px",borderRadius:7,border:"1px solid "+(selId===c.id?NETWORKS[nk].color:"var(--color-border-secondary)"),background:selId===c.id?NETWORKS[nk].light:"transparent",color:selId===c.id?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:selId===c.id?500:400}},c.name);})));})
         ),
         selCo&&React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12}},"Société : ",React.createElement("b",{style:{color:NETWORKS[selCo.network].color}},selCo.name)," · "+(grouped[selCo.id]||[]).length+" lead(s) en base"),
-        React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"var(--color-text-secondary)"}},React.createElement("b",{style:{color:"var(--color-text-primary)"}},"Formats acceptés : "),"Google Ads (Nom complet, Téléphone, CP, Ville…) et contacts entreprises (Activity, Nom, SIREN…) — détection automatique."),
+        React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"var(--color-text-secondary)"}},React.createElement("b",{style:{color:"var(--color-text-primary)"}},"Formats acceptés : "),"Google Ads (Nom complet, Téléphone…) et contacts entreprises (Activity, Nom, SIREN…) — détection automatique."),
         React.createElement("input",{type:"file",accept:".csv",ref:fileRef,onChange:handleFile,style:{display:"none"}}),
         React.createElement("button",{onClick:function(){if(selId&&!uploading)fileRef.current.click();},style:{padding:"9px 20px",borderRadius:8,border:"none",background:selCo?NETWORKS[selCo.network].color:"#888",color:"#fff",fontWeight:500,fontSize:14,cursor:selCo&&!uploading?"pointer":"not-allowed",opacity:uploading?0.7:1}},uploading?"Import en cours…":"⬆ Choisir le fichier CSV")
       ),
