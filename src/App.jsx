@@ -583,8 +583,30 @@ function CompanyView(props){
   var [dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState("");
   var [panel,setPanel]=useState(null),[groupByDept,setGroupByDept]=useState(false);
   var [sortDesc,setSortDesc]=useState(true),[page,setPage]=useState(1);
+  // CA state remonté ici pour persister entre onglets
+  var [commerciaux,setCommerciaux]=useState([]);
+  var [caData,setCaData]=useState([]);
+  var [allCaData,setAllCaData]=useState([]);
+  var [caLoaded,setCaLoaded]=useState(false);
 
   var myLeads=useMemo(function(){return leads.filter(function(l){return l.companyId===company.id;});},[leads,company.id]);
+
+  // Charger CA une seule fois
+  useEffect(function(){
+    if(caLoaded)return;
+    async function loadCA(){
+      try{
+        var comms=await dbSelect("commerciaux","company_id=eq."+company.id+"&order=created_at.asc");
+        setCommerciaux(comms||[]);
+        var ca=await dbSelect("ca_facture","company_id=eq."+company.id);
+        setCaData(ca||[]);
+        var allCa=await dbSelect("ca_facture","order=mois.desc");
+        setAllCaData(allCa||[]);
+        setCaLoaded(true);
+      }catch(e){}
+    }
+    loadCA();
+  },[company.id,caLoaded]);
   var shown=useMemo(function(){
     var filtered=myLeads.filter(function(l){
       var matchStatus=filter==="spam"?l.status==="spam":filter==="tous"?l.status!=="spam":l.status===filter;
@@ -625,7 +647,7 @@ function CompanyView(props){
       })
     ),
     activeTab==="ca"
-      ? React.createElement(CAView,{company:company})
+      ? React.createElement(CAView,{company:company,commerciaux:commerciaux,setCommerciaux:setCommerciaux,caData:caData,setCaData:setCaData,allCaData:allCaData,setAllCaData:setAllCaData})
       : React.createElement("div",{style:{padding:16}},
           React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
             React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
