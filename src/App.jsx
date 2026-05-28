@@ -561,13 +561,26 @@ function CAAdminView(props){
   var [allCa,setAllCa]=useState([]);
   var [allComm,setAllComm]=useState([]);
   var [loading,setLoading]=useState(true);
-  var moisList=getMoisList(6);
+  var [networkSel,setNetworkSel]=useState("renovation");
+  var [moisDebut,setMoisDebut]=useState(function(){var d=new Date();d.setMonth(d.getMonth()-5);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
+  var [moisFin,setMoisFin]=useState(function(){var d=new Date();d.setMonth(d.getMonth()+6);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
+
+  // Tous les mois de jan 2024 à déc 2027
+  var moisListAll=useMemo(function(){
+    var months=[],y=2024,m=1;
+    while(y<2028){months.push(y+"-"+String(m).padStart(2,"0"));m++;if(m>12){m=1;y++;}}
+    return months;
+  },[]);
+
+  var moisList=useMemo(function(){
+    return moisListAll.filter(function(m){return m>=moisDebut&&m<=moisFin;});
+  },[moisListAll,moisDebut,moisFin]);
+
   useEffect(function(){
     setLoading(true);
     async function load(){
       try{
-        var ca=await dbSelect("ca_facture","order=mois.desc");
-        console.log("ADMIN_CA rows:",ca.length, JSON.stringify(ca.slice(0,3)));
+        var ca=await dbSelect("ca_facture","order=mois.asc");
         setAllCa(ca||[]);
         var comms=await dbSelect("commerciaux","order=company_id.asc,created_at.asc");
         setAllComm(comms||[]);
@@ -576,42 +589,75 @@ function CAAdminView(props){
     }
     load();
   },[]);
+
+  var netCompanies=useMemo(function(){return companies.filter(function(c){return c.network===networkSel;});},[companies,networkSel]);
+  var net=NETWORKS[networkSel];
+
   var globalByMois=useMemo(function(){
+    var netIds={};netCompanies.forEach(function(c){netIds[c.id]=true;});
     var r={};
-    moisList.forEach(function(m){r[m]=allCa.filter(function(c){return c.mois===m;}).reduce(function(s,c){return s+(parseFloat(c.montant)||0);},0);});
+    moisList.forEach(function(m){
+      r[m]=allCa.filter(function(c){return netIds[c.company_id]&&c.mois===m;}).reduce(function(s,c){return s+(parseFloat(c.montant)||0);},0);
+    });
     return r;
-  },[allCa,moisList]);
+  },[allCa,moisList,netCompanies]);
+
   function caForCompany(companyId,mois){return allCa.filter(function(c){return c.company_id===companyId&&c.mois===mois;}).reduce(function(s,c){return s+(parseFloat(c.montant)||0);},0);}
   var globalTotal=Object.values(globalByMois).reduce(function(s,v){return s+v;},0);
+
   if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"var(--color-text-secondary)"}},"Chargement…");
+
   return React.createElement("div",null,
-    React.createElement("div",{style:{marginBottom:20}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
-        React.createElement("div",{style:{fontWeight:500,fontSize:14}},"📈 CA Global Réseau par mois"),
-        React.createElement("button",{onClick:function(){props.onRefresh();},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"↻ Actualiser")
-      ),
-      React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
-        moisList.map(function(m){
-          return React.createElement("div",{key:m,style:{flex:1,minWidth:120,background:"var(--color-background-primary)",borderRadius:8,padding:"12px 14px",border:"1px solid var(--color-border-tertiary)"}},
-            React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4,textTransform:"capitalize"}},fmtMois(m)),
-            React.createElement("div",{style:{fontSize:18,fontWeight:500,color:"#185FA5"}},fmtCA(globalByMois[m]||0))
-          );
+    // Contrôles
+    React.createElement("div",{style:{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}},
+      React.createElement("div",{style:{display:"flex",gap:4}},
+        Object.entries(NETWORKS).map(function(entry){
+          var nk=entry[0],nv=entry[1];
+          var active=networkSel===nk;
+          return React.createElement("button",{key:nk,onClick:function(){setNetworkSel(nk);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(active?nv.color:"var(--color-border-secondary)"),background:active?nv.light:"transparent",color:active?nv.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:active?500:400}},nv.label);
         })
+      ),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginLeft:"auto",flexWrap:"wrap"}},
+        React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"De :"),
+        React.createElement("select",{value:moisDebut,onChange:function(e){setMoisDebut(e.target.value);},style:Object.assign({},inp,{padding:"5px 8px",textTransform:"capitalize",fontSize:12})},
+          moisListAll.map(function(m){return React.createElement("option",{key:m,value:m},fmtMois(m));})
+        ),
+        React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"À :"),
+        React.createElement("select",{value:moisFin,onChange:function(e){setMoisFin(e.target.value);},style:Object.assign({},inp,{padding:"5px 8px",textTransform:"capitalize",fontSize:12})},
+          moisListAll.map(function(m){return React.createElement("option",{key:m,value:m},fmtMois(m));})
+        ),
+        React.createElement("button",{onClick:function(){props.onRefresh();},style:{padding:"6px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"↻ Actualiser")
       )
     ),
+    // Tuiles totaux
+    React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}},
+      moisList.map(function(m){
+        var now=new Date();
+        var curMois=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+        var isFuture=m>curMois;
+        return React.createElement("div",{key:m,style:{flex:1,minWidth:110,background:isFuture?"var(--color-background-secondary)":"var(--color-background-primary)",borderRadius:8,padding:"10px 12px",border:"1px solid "+(isFuture?"var(--color-border-tertiary)":net.color+"44")}},
+          React.createElement("div",{style:{fontSize:10,color:"var(--color-text-secondary)",marginBottom:3,textTransform:"capitalize"}},fmtMois(m)),
+          React.createElement("div",{style:{fontSize:16,fontWeight:500,color:isFuture?"var(--color-text-tertiary)":net.color}},isFuture?"—":fmtCA(globalByMois[m]||0))
+        );
+      })
+    ),
+    // Tableau
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
-      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:600}},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:600,fontSize:12}},
         React.createElement("thead",null,
-          React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+          React.createElement("tr",{style:{background:"var(--color-background-secondary)",color:"var(--color-text-secondary)"}},
             React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Société"),
-            React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Réseau"),
-            moisList.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",textTransform:"capitalize"}},fmtMois(m));}),
+            moisList.map(function(m){
+              var now=new Date();
+              var curMois=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+              var isFuture=m>curMois;
+              return React.createElement("th",{key:m,style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",textTransform:"capitalize",color:isFuture?"var(--color-text-tertiary)":"var(--color-text-secondary)"}},fmtMois(m));
+            }),
             React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
           )
         ),
         React.createElement("tbody",null,
-          companies.map(function(c,ci){
-            var net=NETWORKS[c.network];
+          netCompanies.map(function(c,ci){
             var commsForCo=allComm.filter(function(cm){return cm.company_id===c.id;});
             var monthlyCA=moisList.map(function(m){return caForCompany(c.id,m);});
             var total=monthlyCA.reduce(function(s,v){return s+v;},0);
@@ -621,25 +667,27 @@ function CAAdminView(props){
               if(commTotal===0)return null;
               return React.createElement("tr",{key:comm.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:"var(--color-background-secondary)"}},
                 React.createElement("td",{style:{padding:"6px 14px 6px 28px",fontSize:12,color:"var(--color-text-secondary)"}},(comm.role==="gerant"?"👔 ":"👤 ")+comm.nom),
-                React.createElement("td",{style:{padding:"6px 14px"}}),
-                commMonthly.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"6px 14px",textAlign:"center",fontSize:12,color:"var(--color-text-secondary)"}},ca>0?fmtCA(ca):"—");}),
-                React.createElement("td",{style:{padding:"6px 14px",textAlign:"center",fontSize:12,color:"var(--color-text-secondary)"}},commTotal>0?fmtCA(commTotal):"—")
+                commMonthly.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"6px 14px",textAlign:"center",color:"var(--color-text-secondary)"}},ca>0?fmtCA(ca):"—");}),
+                React.createElement("td",{style:{padding:"6px 14px",textAlign:"center",color:"var(--color-text-secondary)"}},commTotal>0?fmtCA(commTotal):"—")
               );
             });
             return React.createElement(React.Fragment,{key:c.id},
               React.createElement("tr",{style:{borderBottom:"1px solid var(--color-border-tertiary)",background:ci%2===0?"transparent":"var(--color-background-secondary)"}},
-                React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),c.name)),
-                React.createElement("td",{style:{padding:"9px 14px"}},React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)),
-                monthlyCA.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:ca>0?500:400,color:ca>0?net.color:"var(--color-text-tertiary)"}},ca>0?fmtCA(ca):"—");}),
-                React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},total>0?fmtCA(total):"—")
+                React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                    React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),c.name
+                  )
+                ),
+                monthlyCA.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"9px 14px",textAlign:"center",fontWeight:ca>0?500:400,color:ca>0?net.color:"var(--color-text-tertiary)"}},ca>0?fmtCA(ca):"—");}),
+                React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:500,color:net.color}},total>0?fmtCA(total):"—")
               ),
               commRows
             );
           }),
           React.createElement("tr",{style:{background:"var(--color-background-secondary)",borderTop:"2px solid var(--color-border-secondary)"}},
-            React.createElement("td",{colSpan:2,style:{padding:"10px 14px",fontWeight:500,fontSize:13}},"TOTAL RÉSEAU"),
-            moisList.map(function(m){return React.createElement("td",{key:m,style:{padding:"10px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},fmtCA(globalByMois[m]||0));}),
-            React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},fmtCA(globalTotal))
+            React.createElement("td",{style:{padding:"10px 14px",fontWeight:600,fontSize:13}},"TOTAL "+net.label.toUpperCase()),
+            moisList.map(function(m){return React.createElement("td",{key:m,style:{padding:"10px 14px",textAlign:"center",fontWeight:600,color:net.color,fontSize:13}},globalByMois[m]>0?fmtCA(globalByMois[m]):"—");}),
+            React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:600,color:net.color,fontSize:13}},globalTotal>0?fmtCA(globalTotal):"—")
           )
         )
       )
