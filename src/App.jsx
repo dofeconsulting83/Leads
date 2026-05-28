@@ -244,35 +244,17 @@ function CARow(props){
 
 function CAView(props){
   var company=props.company,net=NETWORKS[company.network];
-  var [commerciaux,setCommerciaux]=useState([]);
-  var [caData,setCaData]=useState([]);
-  var [globalCA,setGlobalCA]=useState({});
+  var commerciaux=props.commerciauxProp||[];
+  var setCommerciaux=props.setCommerciaux;
+  var caData=props.caDataProp||[];
+  var setCaData=props.setCaData;
+  var globalCA=props.globalCAProp||{};
+  var setGlobalCA=props.setGlobalCA;
+  var loading=!props.loaded;
   var [moisSel,setMoisSel]=useState(function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   var [newNom,setNewNom]=useState("");
   var [newRole,setNewRole]=useState("commercial");
-  var [loading,setLoading]=useState(true);
   var moisList=getMoisList(6);
-
-  useEffect(function(){
-    var cancelled=false;
-    async function load(){
-      try{
-        var comms=await dbSelect("commerciaux","company_id=eq."+company.id+"&order=created_at.asc");
-        var ca=await dbSelect("ca_facture","company_id=eq."+company.id);
-        var allCa=await dbSelect("ca_facture","select=mois,montant");
-        var glo={};
-        (allCa||[]).forEach(function(c){var m=c.mois;if(!glo[m])glo[m]=0;glo[m]+=(parseFloat(c.montant)||0);});
-        if(!cancelled){
-          setCommerciaux(comms||[]);
-          setCaData(ca||[]);
-          setGlobalCA(glo);
-          setLoading(false);
-        }
-      }catch(e){if(!cancelled)setLoading(false);}
-    }
-    load();
-    return function(){cancelled=true;};
-  },[company.id]);
 
   async function addCommercial(){
     if(!newNom.trim())return;
@@ -596,6 +578,27 @@ function CompanyView(props){
   var [dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState("");
   var [panel,setPanel]=useState(null),[groupByDept,setGroupByDept]=useState(false);
   var [sortDesc,setSortDesc]=useState(true),[page,setPage]=useState(1);
+  // CA state lifted here to survive tab switches
+  var [caCommerciaux,setCaCommerciaux]=useState(null);
+  var [caData,setCaData]=useState(null);
+  var [caGlobalCA,setCaGlobalCA]=useState({});
+  var [caLoaded,setCaLoaded]=useState(false);
+  useEffect(function(){
+    if(caLoaded)return;
+    var cancelled=false;
+    async function loadCA(){
+      try{
+        var comms=await dbSelect("commerciaux","company_id=eq."+company.id+"&order=created_at.asc");
+        var ca=await dbSelect("ca_facture","company_id=eq."+company.id);
+        var allCa=await dbSelect("ca_facture","select=mois,montant");
+        var glo={};
+        (allCa||[]).forEach(function(c){var m=c.mois;if(!glo[m])glo[m]=0;glo[m]+=(parseFloat(c.montant)||0);});
+        if(!cancelled){setCaCommerciaux(comms||[]);setCaData(ca||[]);setCaGlobalCA(glo);setCaLoaded(true);}
+      }catch(e){if(!cancelled)setCaLoaded(true);}
+    }
+    loadCA();
+    return function(){cancelled=true;};
+  },[company.id,caLoaded]);
   var myLeads=useMemo(function(){return leads.filter(function(l){return l.companyId===company.id;});},[leads,company.id]);
   var shown=useMemo(function(){
     var filtered=myLeads.filter(function(l){
@@ -642,7 +645,7 @@ function CompanyView(props){
       })
     ),
     activeTab==="ca"
-      ? React.createElement(CAView,{company:company})
+      ? React.createElement(CAView,{company:company,commerciauxProp:caCommerciaux,caDataProp:caData,globalCAProp:caGlobalCA,loaded:caLoaded,setCommerciaux:setCaCommerciaux,setCaData:setCaData,setGlobalCA:setCaGlobalCA})
       : React.createElement("div",{style:{padding:16}},
           React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
             React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
