@@ -296,18 +296,23 @@ function CAView(props){
 
   async function saveCA(commercialId,commercialNom,montant,cb){
     var existing=caData.find(function(c){return c.commercial_id===commercialId&&c.mois===moisSel;});
+    console.log("SAVECA called montant="+montant+" existing="+!!existing+" moisSel="+moisSel+" companyId="+company.id);
     if(existing){
       setCaData(function(prev){return prev.map(function(c){return c.id===existing.id?Object.assign({},c,{montant:montant}):c;});});
       setGlobalCA(function(prev){var oldVal=parseFloat(existing.montant)||0;var diff=montant-oldVal;var r=Object.assign({},prev);r[moisSel]=(r[moisSel]||0)+diff;return r;});
-      try{await dbUpdate("ca_facture","id=eq."+existing.id,{montant:montant});cb(true);}
-      catch(e){cb(false,e.message);}
+      try{await dbUpdate("ca_facture","id=eq."+existing.id,{montant:montant});console.log("SAVECA UPDATE OK");cb(true);}
+      catch(e){console.error("SAVECA UPDATE ERR",e.message);cb(false,e.message);}
     } else {
       var row={id:"ca_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:company.id,commercial_id:commercialId,commercial_nom:commercialNom,mois:moisSel,montant:montant};
+      console.log("SAVECA INSERT row",JSON.stringify(row));
       setCaData(function(prev){return prev.concat(row);});
       setGlobalCA(function(prev){var r=Object.assign({},prev);r[moisSel]=(r[moisSel]||0)+montant;return r;});
-      try{await dbInsertOne("ca_facture",row);cb(true);}
-      catch(e){
-        // rollback local state
+      try{
+        await dbInsertOne("ca_facture",row);
+        console.log("SAVECA INSERT OK");
+        cb(true);
+      }catch(e){
+        console.error("SAVECA INSERT ERR",e.message);
         setCaData(function(prev){return prev.filter(function(c){return c.id!==row.id;});});
         setGlobalCA(function(prev){var r=Object.assign({},prev);r[moisSel]=(r[moisSel]||0)-montant;return r;});
         cb(false,e.message);
