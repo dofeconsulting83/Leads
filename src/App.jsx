@@ -125,6 +125,16 @@ function getMoisList(n) {
   for(var i=n-1;i>=0;i--){var d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);months.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));}
   return months;
 }
+function getMoisListSince(startYear, startMonth) {
+  var months=[];
+  var now=new Date();
+  var y=startYear,m=startMonth;
+  while(y<now.getFullYear()||(y===now.getFullYear()&&m<=now.getMonth()+1)){
+    months.push(y+"-"+String(m).padStart(2,"0"));
+    m++;if(m>12){m=1;y++;}
+  }
+  return months;
+}
 function parseMontant(val) {
   var cleaned=val.trim().toLowerCase().replace(/\s/g,"").replace(/€/g,"").replace(/,/g,".");
   var multiplier=1;
@@ -262,7 +272,8 @@ function CAView(props){
   var [moisSel,setMoisSel]=useState(function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   var [newNom,setNewNom]=useState("");
   var [newRole,setNewRole]=useState("commercial");
-  var moisList=getMoisList(6);
+  var moisList=getMoisList(6); // pour le tableau palmarès
+  var moisListAll=getMoisListSince(2024,1); // pour le select complet
 
   useEffect(function(){
     var cancelled=false;
@@ -397,11 +408,60 @@ function CAView(props){
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:20}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}},
         React.createElement("div",{style:{fontWeight:500,fontSize:15}},"💼 CA Facturé — "+company.name),
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
           React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Mois :"),
           React.createElement("select",{value:moisSel,onChange:function(e){setMoisSel(e.target.value);},style:Object.assign({},inp,{padding:"5px 10px",textTransform:"capitalize"})},
-            moisList.map(function(m){return React.createElement("option",{key:m,value:m},fmtMois(m));})
-          )
+            moisListAll.slice().reverse().map(function(m){return React.createElement("option",{key:m,value:m},fmtMois(m));})
+          ),
+          React.createElement("button",{onClick:function(){
+            var rows=commerciaux.map(function(comm){
+              var existing=caForMois.find(function(c){return c.commercial_id===comm.id;});
+              return{nom:comm.nom,role:comm.role,montant:existing?parseFloat(existing.montant)||0:0};
+            });
+            var moisLabel=fmtMois(moisSel);
+            var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>CA '+company.name+' — '+moisLabel+'</title>'
+              +'<style>*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}'
+              +'body{padding:32px;color:#1a1a18}'
+              +'.header{margin-bottom:24px}.logo{font-size:11px;color:#888;margin-bottom:4px}'
+              +'.title{font-size:20px;font-weight:700;color:'+net.color+'}'
+              +'.subtitle{font-size:13px;color:#666;margin-top:4px}'
+              +'table{width:100%;border-collapse:collapse;margin-top:20px}'
+              +'th{background:'+net.color+';color:#fff;padding:10px 14px;text-align:left;font-size:12px}'
+              +'th.right{text-align:right}'
+              +'td{padding:10px 14px;font-size:13px;border-bottom:1px solid #eee}'
+              +'td.right{text-align:right;font-weight:500}'
+              +'.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:#f0f0f0;color:#555}'
+              +'.badge.gerant{background:#FAEEDA;color:#633806}'
+              +'.total{background:'+net.light+';font-weight:700}'
+              +'.total td{padding:12px 14px;font-size:14px;color:'+net.color+';border-bottom:none}'
+              +'tr:nth-child(even){background:#fafafa}'
+              +'.footer{margin-top:24px;font-size:11px;color:#aaa;text-align:right}'
+              +'@media print{body{padding:20px}}'
+              +'</style></head><body>'
+              +'<div class="header">'
+              +'<div class="logo">'+net.label+' — Plateforme Leads</div>'
+              +'<div class="title">CA Facturé — '+company.name+'</div>'
+              +'<div class="subtitle" style="text-transform:capitalize">'+moisLabel+'</div>'
+              +'</div>'
+              +'<table><thead><tr>'
+              +'<th>Commercial</th><th>Rôle</th><th class="right">Montant</th>'
+              +'</tr></thead><tbody>';
+            rows.forEach(function(r){
+              html+='<tr><td>'+r.nom+'</td>'
+                +'<td><span class="badge'+(r.role==="gerant"?" gerant":"")+'">'+( r.role==="gerant"?"Gérant":"Commercial")+'</span></td>'
+                +'<td class="right">'+(r.montant>0?fmtCA(r.montant):"—")+'</td></tr>';
+            });
+            html+='</tbody><tfoot><tr class="total"><td colspan="2">Total '+company.name+'</td>'
+              +'<td class="right">'+fmtCA(rows.reduce(function(s,r){return s+r.montant;},0))+'</td></tr>'
+              +'</tfoot></table>'
+              +'<div class="footer">Généré le '+new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})+'</div>'
+              +'</body></html>';
+            var w=window.open("","_blank","width=800,height=600");
+            w.document.write(html);
+            w.document.close();
+            w.focus();
+            setTimeout(function(){w.print();},400);
+          },style:{padding:"6px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500,whiteSpace:"nowrap"}},"📄 Exporter PDF")
         )
       ),
       commerciaux.length===0
