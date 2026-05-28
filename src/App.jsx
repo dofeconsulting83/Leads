@@ -254,9 +254,10 @@ function CARow(props){
 // CA state lives here — never remounts on tab switch
 function CAView(props){
   var company=props.company,net=NETWORKS[company.network];
-  var [commerciaux,setCommerciaux]=useState(null); // null = pas encore chargé
+  var [commerciaux,setCommerciaux]=useState(null);
   var [caData,setCaData]=useState([]);
   var [globalCA,setGlobalCA]=useState({});
+  var [allCaByCompany,setAllCaByCompany]=useState({});
   var [loadError,setLoadError]=useState("");
   var [moisSel,setMoisSel]=useState(function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   var [newNom,setNewNom]=useState("");
@@ -269,10 +270,18 @@ function CAView(props){
       try{
         var comms=await dbSelect("commerciaux","company_id=eq."+company.id+"&order=created_at.asc");
         var ca=await dbSelect("ca_facture","company_id=eq."+company.id);
-        var allCa=await dbSelect("ca_facture","select=mois,montant");
+        var allCa=await dbSelect("ca_facture","select=company_id,mois,montant");
         var glo={};
-        (allCa||[]).forEach(function(c){var m=c.mois;if(!glo[m])glo[m]=0;glo[m]+=(parseFloat(c.montant)||0);});
-        if(!cancelled){setCommerciaux(comms||[]);setCaData(ca||[]);setGlobalCA(glo);}
+        var byCompany={};
+        (allCa||[]).forEach(function(c){
+          var m=c.mois;
+          if(!glo[m])glo[m]=0;
+          glo[m]+=(parseFloat(c.montant)||0);
+          if(!byCompany[c.company_id])byCompany[c.company_id]={};
+          if(!byCompany[c.company_id][m])byCompany[c.company_id][m]=0;
+          byCompany[c.company_id][m]+=(parseFloat(c.montant)||0);
+        });
+        if(!cancelled){setCommerciaux(comms||[]);setCaData(ca||[]);setGlobalCA(glo);setAllCaByCompany(byCompany);}
       }catch(e){if(!cancelled)setLoadError(e.message||"Erreur chargement");}
     }
     load();
@@ -329,7 +338,7 @@ function CAView(props){
   return React.createElement("div",{style:{padding:16}},
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:20}},
       React.createElement("div",{style:{fontWeight:500,fontSize:15,marginBottom:14}},"📈 CA Global Réseau"),
-      React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap"}},
+      React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
         moisList.map(function(m){
           var total=globalCA[m]||0;
           var isCurrent=m===moisSel;
@@ -338,6 +347,39 @@ function CAView(props){
             React.createElement("div",{style:{fontSize:18,fontWeight:500,color:isCurrent?net.color:"var(--color-text-primary)"}},fmtCA(total))
           );
         })
+      ),
+      React.createElement("div",{style:{overflowX:"auto"}},
+        React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:500,fontSize:12}},
+          React.createElement("thead",null,
+            React.createElement("tr",{style:{background:"var(--color-background-secondary)",color:"var(--color-text-secondary)"}},
+              React.createElement("th",{style:{padding:"7px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Société"),
+              moisList.map(function(m){return React.createElement("th",{key:m,style:{padding:"7px 12px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",textTransform:"capitalize"}},fmtMois(m));}),
+              React.createElement("th",{style:{padding:"7px 12px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
+            )
+          ),
+          React.createElement("tbody",null,
+            INIT_COMPANIES.filter(function(c){return c.network===company.network;}).map(function(c,ci){
+              var isMe=c.id===company.id;
+              var monthlyCA=moisList.map(function(m){return(allCaByCompany[c.id]&&allCaByCompany[c.id][m])||0;});
+              var total=monthlyCA.reduce(function(s,v){return s+v;},0);
+              return React.createElement("tr",{key:c.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:isMe?net.light:ci%2===0?"transparent":"var(--color-background-secondary)"}},
+                React.createElement("td",{style:{padding:"8px 12px",fontWeight:isMe?600:400,color:isMe?net.color:"var(--color-text-primary)"}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                    isMe&&React.createElement("div",{style:{width:6,height:6,borderRadius:"50%",background:net.color}}),
+                    c.name+(isMe?" (vous)":"")
+                  )
+                ),
+                monthlyCA.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"8px 12px",textAlign:"center",fontWeight:ca>0?500:400,color:ca>0?net.color:"var(--color-text-tertiary)"}},ca>0?fmtCA(ca):"—");}),
+                React.createElement("td",{style:{padding:"8px 12px",textAlign:"center",fontWeight:500,color:net.color}},total>0?fmtCA(total):"—")
+              );
+            }),
+            React.createElement("tr",{style:{background:"var(--color-background-secondary)",borderTop:"2px solid var(--color-border-secondary)"}},
+              React.createElement("td",{style:{padding:"8px 12px",fontWeight:600,fontSize:12}},"TOTAL RÉSEAU"),
+              moisList.map(function(m){return React.createElement("td",{key:m,style:{padding:"8px 12px",textAlign:"center",fontWeight:600,color:net.color}},fmtCA(globalCA[m]||0));}),
+              React.createElement("td",{style:{padding:"8px 12px",textAlign:"center",fontWeight:600,color:net.color}},fmtCA(Object.values(globalCA).reduce(function(s,v){return s+v;},0)))
+            )
+          )
+        )
       )
     ),
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:20}},
