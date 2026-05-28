@@ -360,10 +360,12 @@ function CAAdminView(props){
     async function load(){
       try{
         var ca=await dbSelect("ca_facture","order=mois.desc");
+        console.log("CA_ADMIN_DEBUG ca_facture rows:", JSON.stringify(ca));
         setAllCa(ca||[]);
         var comms=await dbSelect("commerciaux","order=company_id.asc,created_at.asc");
+        console.log("CA_ADMIN_DEBUG commerciaux rows:", JSON.stringify(comms));
         setAllComm(comms||[]);
-      }catch(e){}
+      }catch(e){console.error("CA_ADMIN_DEBUG error:",e);}
       setLoading(false);
     }
     load();
