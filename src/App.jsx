@@ -748,6 +748,7 @@ function AdminView(props){
   var fileRef=useRef();
   var [selId,setSelId]=useState(companies[0]?companies[0].id:"");
   var [msg,setMsg]=useState(null),[tab,setTab]=useState("import");
+  var [tabVisits,setTabVisits]=useState(0);
   var [editId,setEditId]=useState(null),[editPwd,setEditPwd]=useState("");
   var [uploading,setUploading]=useState(false),[loginHistory,setLoginHistory]=useState([]);
   useEffect(function(){dbSelect("login_history","order=login_at.desc&limit=200").then(function(rows){if(Array.isArray(rows))setLoginHistory(rows);}).catch(function(){});},[]);
@@ -793,7 +794,7 @@ function AdminView(props){
     React.createElement("div",{style:{padding:16}},
       React.createElement("div",{style:{display:"flex",gap:6,marginBottom:16,borderBottom:"1px solid var(--color-border-tertiary)",paddingBottom:10,flexWrap:"wrap"}},
         tabs.map(function(item){
-          return React.createElement("button",{key:item[0],onClick:function(){setTab(item[0]);},style:{padding:"6px 16px",borderRadius:8,border:"none",background:tab===item[0]?"var(--color-background-secondary)":"transparent",fontWeight:tab===item[0]?500:400,cursor:"pointer",fontSize:13,color:"var(--color-text-primary)"}},item[1]);
+          return React.createElement("button",{key:item[0],onClick:function(){setTab(item[0]);if(item[0]==="ca")setTabVisits(function(v){return v+1;});},style:{padding:"6px 16px",borderRadius:8,border:"none",background:tab===item[0]?"var(--color-background-secondary)":"transparent",fontWeight:tab===item[0]?500:400,cursor:"pointer",fontSize:13,color:"var(--color-text-primary)"}},item[1]);
         })
       ),
       msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},
@@ -895,7 +896,7 @@ function AdminView(props){
         })
       ),
 
-      tab==="ca"&&React.createElement(CAAdminView,{companies:companies}),
+      tab==="ca"&&React.createElement(CAAdminView,{key:"ca-"+tabVisits,companies:companies}),
 
       tab==="connexions"&&React.createElement("div",null,
         React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},loginHistory.length+" connexion(s)"),
