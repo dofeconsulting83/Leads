@@ -253,7 +253,7 @@ function CARow(props){
 
 // CA state lives here — never remounts on tab switch
 function CAView(props){
-  var company=props.company,net=NETWORKS[company.network];
+  var company=props.company,net=NETWORKS[company.network],companies=props.companies||INIT_COMPANIES;
   var [commerciaux,setCommerciaux]=useState(null);
   var [caData,setCaData]=useState([]);
   var [globalCA,setGlobalCA]=useState({});
@@ -359,11 +359,14 @@ function CAView(props){
             )
           ),
           React.createElement("tbody",null,
-            INIT_COMPANIES.filter(function(c){return c.network===company.network;}).map(function(c){
+            companies.filter(function(c){return c.network===company.network;}).map(function(c){
               var monthlyCA=moisList.map(function(m){return(allCaByCompany[c.id]&&allCaByCompany[c.id][m])||0;});
               var total=monthlyCA.reduce(function(s,v){return s+v;},0);
               return{c:c,monthlyCA:monthlyCA,total:total};
-            }).sort(function(a,b){return b.total-a.total;}).map(function(item,rank){
+            }).sort(function(a,b){
+              if(b.total!==a.total)return b.total-a.total;
+              return a.c.name.localeCompare(b.c.name);
+            }).map(function(item,rank){
               var c=item.c,monthlyCA=item.monthlyCA,total=item.total;
               var isMe=c.id===company.id;
               var medal=rank===0?"🥇":rank===1?"🥈":rank===2?"🥉":"";
@@ -618,7 +621,7 @@ function LeadsTable(props){
 }
 
 function CompanyView(props){
-  var company=props.company,leads=props.leads,setLeads=props.setLeads,onLogout=props.onLogout;
+  var company=props.company,leads=props.leads,setLeads=props.setLeads,onLogout=props.onLogout,companies=props.companies||INIT_COMPANIES;
   var net=NETWORKS[company.network],statuses=getStatuses(company.id);
   var [activeTab,setActiveTab]=useState("leads");
   var [filter,setFilter]=useState("tous"),[search,setSearch]=useState("");
@@ -672,7 +675,7 @@ function CompanyView(props){
     ),
     // CAView is always mounted (hidden when not active) so state survives tab switches
     React.createElement("div",{style:{display:activeTab==="ca"?"block":"none"}},
-      React.createElement(CAView,{company:company})
+      React.createElement(CAView,{company:company,companies:companies})
     ),
     activeTab==="leads"&&React.createElement("div",{style:{padding:16}},
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
@@ -955,5 +958,5 @@ export default function App(){
   if(session.role==="admin")return React.createElement(AdminView,{leads:leads,setLeads:setLeads,companies:companies,setCompanies:setCompanies,onLogout:handleLogout});
   var company=companies.find(function(c){return c.id===session.companyId;});
   if(!company)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies});
-  return React.createElement(CompanyView,{company:company,leads:leads,setLeads:setLeads,onLogout:handleLogout});
+  return React.createElement(CompanyView,{company:company,leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
 }
