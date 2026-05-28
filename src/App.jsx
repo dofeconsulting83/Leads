@@ -348,7 +348,66 @@ function CAView(props){
 
   return React.createElement("div",{style:{padding:16}},
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:20}},
-      React.createElement("div",{style:{fontWeight:500,fontSize:15,marginBottom:14}},"📈 CA Global Réseau"),
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}},
+        React.createElement("div",{style:{fontWeight:500,fontSize:15}},"📈 CA Global Réseau"),
+        React.createElement("button",{onClick:function(){
+          var networkCompanies=companies.filter(function(c){return c.network===company.network;}).map(function(c){
+            var monthlyCA=moisList.map(function(m){return(allCaByCompany[c.id]&&allCaByCompany[c.id][m])||0;});
+            var total=monthlyCA.reduce(function(s,v){return s+v;},0);
+            return{c:c,monthlyCA:monthlyCA,total:total};
+          }).sort(function(a,b){return b.total!==a.total?b.total-a.total:a.c.name.localeCompare(b.c.name);});
+          var medals=["🥇","🥈","🥉"];
+          var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Palmarès CA — '+net.label+'</title>'
+            +'<style>*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}'
+            +'body{padding:32px;color:#1a1a18}'
+            +'.header{margin-bottom:24px}.logo{font-size:11px;color:#888;margin-bottom:4px}'
+            +'.title{font-size:20px;font-weight:700;color:'+net.color+'}'
+            +'.subtitle{font-size:13px;color:#666;margin-top:4px}'
+            +'table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px}'
+            +'th{background:'+net.color+';color:#fff;padding:9px 12px;text-align:center;white-space:nowrap}'
+            +'th.left{text-align:left}'
+            +'td{padding:9px 12px;border-bottom:1px solid #eee;text-align:center}'
+            +'td.left{text-align:left}'
+            +'td.me{background:'+net.light+';font-weight:700;color:'+net.color+'}'
+            +'tr:nth-child(even) td:not(.me){background:#fafafa}'
+            +'.total-row td{background:'+net.color+';color:#fff;font-weight:700;padding:10px 12px;border:none}'
+            +'.footer{margin-top:24px;font-size:11px;color:#aaa;text-align:right}'
+            +'@media print{body{padding:16px}}'
+            +'</style></head><body>'
+            +'<div class="header">'
+            +'<div class="logo">'+net.label+' — Plateforme Leads</div>'
+            +'<div class="title">🏆 Palmarès CA — '+net.label+'</div>'
+            +'<div class="subtitle">6 derniers mois · Généré le '+new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})+'</div>'
+            +'</div>'
+            +'<table><thead><tr>'
+            +'<th style="width:40px">#</th><th class="left">Société</th>'
+            +moisList.map(function(m){return'<th style="text-transform:capitalize">'+fmtMois(m)+'</th>';}).join("")
+            +'<th>Total</th>'
+            +'</tr></thead><tbody>';
+          networkCompanies.forEach(function(item,rank){
+            var isMe=item.c.id===company.id;
+            var medal=medals[rank]||(rank+1);
+            var cls=isMe?" class=\"me\"":"";
+            html+='<tr>';
+            html+='<td'+cls+'>'+medal+'</td>';
+            html+='<td class="left'+(isMe?" me":"")+'">'+item.c.name+(isMe?" ★":"")+'</td>';
+            item.monthlyCA.forEach(function(ca){html+='<td'+cls+'>'+(ca>0?fmtCA(ca):"—")+'</td>';});
+            html+='<td'+cls+'>'+(item.total>0?fmtCA(item.total):"—")+'</td>';
+            html+='</tr>';
+          });
+          html+='</tbody><tfoot><tr class="total-row">';
+          html+='<td colspan="2">TOTAL RÉSEAU</td>';
+          moisList.forEach(function(m){html+='<td>'+fmtCA(globalCA[m]||0)+'</td>';});
+          html+='<td>'+fmtCA(Object.values(globalCA).reduce(function(s,v){return s+v;},0))+'</td>';
+          html+='</tr></tfoot></table>'
+            +'</body></html>';
+          var w=window.open("","_blank","width=900,height=650");
+          w.document.write(html);
+          w.document.close();
+          w.focus();
+          setTimeout(function(){w.print();},400);
+        },style:{padding:"6px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500,whiteSpace:"nowrap"}},"📄 Exporter palmarès PDF")
+      ),
       React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
         moisList.map(function(m){
           var total=globalCA[m]||0;
