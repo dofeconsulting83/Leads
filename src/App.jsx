@@ -282,12 +282,13 @@ function CAView(props){
         r[moisSel]=(r[moisSel]||0)+diff;
         return r;
       });
-      try{await dbUpdate("ca_facture","id=eq."+existing.id,{montant:montant});}catch(e){}
+      try{await dbUpdate("ca_facture","id=eq."+existing.id,{montant:montant});}catch(e){console.error("SAVE_CA UPDATE ERROR:",e.message);}
     } else {
       var row={id:"ca_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:company.id,commercial_id:commercialId,commercial_nom:commercialNom,mois:moisSel,montant:montant};
+      console.log("SAVE_CA INSERT row:",JSON.stringify(row));
       setCaData(function(prev){return prev.concat(row);});
       setGlobalCA(function(prev){var r=Object.assign({},prev);r[moisSel]=(r[moisSel]||0)+montant;return r;});
-      try{await dbInsertOne("ca_facture",row);}catch(e){}
+      try{await dbInsertOne("ca_facture",row);console.log("SAVE_CA INSERT OK");}catch(e){console.error("SAVE_CA INSERT ERROR:",e.message);}
     }
   }
 
