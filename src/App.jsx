@@ -203,6 +203,7 @@ function Badge(props){
   var s=statuses.find(function(x){return x.key===props.statusKey;})||STATUSES[0];
   return React.createElement("span",{style:{fontSize:11,padding:"2px 9px",borderRadius:10,background:s.bg,color:s.color,fontWeight:500,whiteSpace:"nowrap"}},s.label);
 }
+
 function Pagination(props){
   var page=props.page,total=props.total,pageSize=props.pageSize,onChange=props.onChange,color=props.color;
   var totalPages=Math.max(1,Math.ceil(total/pageSize));
@@ -216,7 +217,6 @@ function Pagination(props){
   );
 }
 
-// ── CA ROW ────────────────────────────────────────────────────────────────────
 function CARow(props){
   var comm=props.comm,color=props.color,initialValue=props.initialValue;
   var [val,setVal]=useState(initialValue||"");
@@ -242,15 +242,14 @@ function CARow(props){
   );
 }
 
-// ── CA VIEW SOCIÉTÉ ───────────────────────────────────────────────────────────
 function CAView(props){
   var company=props.company,net=NETWORKS[company.network];
   var [commerciaux,setCommerciaux]=useState([]);
-  var [caData,setCaData]=useState([]); // CA de cette société uniquement
-  var [globalCA,setGlobalCA]=useState({}); // totaux globaux par mois
+  var [caData,setCaData]=useState([]);
+  var [globalCA,setGlobalCA]=useState({});
   var [moisSel,setMoisSel]=useState(function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
-  var [newNom,setNewNom]=useState(""),newRole_=[useState("commercial")];
-  var newRole=newRole_[0][0],setNewRole=newRole_[0][1];
+  var [newNom,setNewNom]=useState("");
+  var [newRole,setNewRole]=useState("commercial");
   var [loading,setLoading]=useState(true);
   var moisList=getMoisList(6);
 
@@ -260,7 +259,6 @@ function CAView(props){
       try{
         var comms=await dbSelect("commerciaux","company_id=eq."+company.id+"&order=created_at.asc");
         var ca=await dbSelect("ca_facture","company_id=eq."+company.id);
-        // Calcul global par mois depuis toutes les sociétés
         var allCa=await dbSelect("ca_facture","select=mois,montant");
         var glo={};
         (allCa||[]).forEach(function(c){var m=c.mois;if(!glo[m])glo[m]=0;glo[m]+=(parseFloat(c.montant)||0);});
@@ -279,7 +277,7 @@ function CAView(props){
   async function addCommercial(){
     if(!newNom.trim())return;
     var row={id:"comm_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:company.id,nom:newNom.trim(),role:newRole};
-    setCommerciaux(function(prev){return prev.concat(row);}); // optimistic
+    setCommerciaux(function(prev){return prev.concat(row);});
     setNewNom("");
     try{await dbInsertOne("commerciaux",row);}catch(e){setCommerciaux(function(prev){return prev.filter(function(c){return c.id!==row.id;});});}
   }
@@ -294,7 +292,6 @@ function CAView(props){
   async function saveCA(commercialId,commercialNom,montant){
     var existing=caData.find(function(c){return c.commercial_id===commercialId&&c.mois===moisSel;});
     if(existing){
-      // Update local immédiatement
       setCaData(function(prev){return prev.map(function(c){return c.id===existing.id?Object.assign({},c,{montant:montant}):c;});});
       setGlobalCA(function(prev){
         var oldVal=parseFloat(existing.montant)||0;
@@ -306,7 +303,6 @@ function CAView(props){
       try{await dbUpdate("ca_facture","id=eq."+existing.id,{montant:montant});}catch(e){}
     } else {
       var row={id:"ca_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:company.id,commercial_id:commercialId,commercial_nom:commercialNom,mois:moisSel,montant:montant};
-      // Update local immédiatement
       setCaData(function(prev){return prev.concat(row);});
       setGlobalCA(function(prev){var r=Object.assign({},prev);r[moisSel]=(r[moisSel]||0)+montant;return r;});
       try{await dbInsertOne("ca_facture",row);}catch(e){}
@@ -319,7 +315,6 @@ function CAView(props){
   if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"var(--color-text-secondary)"}},"Chargement…");
 
   return React.createElement("div",{style:{padding:16}},
-    // Global réseau
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:20}},
       React.createElement("div",{style:{fontWeight:500,fontSize:15,marginBottom:14}},"📈 CA Global Réseau"),
       React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap"}},
@@ -333,7 +328,6 @@ function CAView(props){
         })
       )
     ),
-    // CA société
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:20}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}},
         React.createElement("div",{style:{fontWeight:500,fontSize:15}},"💼 CA Facturé — "+company.name),
@@ -357,7 +351,6 @@ function CAView(props){
               React.createElement("span",{style:{fontWeight:700,fontSize:20,color:net.color}},fmtCA(totalSociete))
             )
           ),
-      // Ajouter commercial
       React.createElement("div",{style:{marginTop:16,paddingTop:16,borderTop:"1px solid var(--color-border-tertiary)"}},
         React.createElement("div",{style:{fontSize:12,fontWeight:500,color:"var(--color-text-secondary)",marginBottom:8}},"Ajouter un membre"),
         React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}},
@@ -373,7 +366,6 @@ function CAView(props){
   );
 }
 
-// ── CA ADMIN VIEW ─────────────────────────────────────────────────────────────
 function CAAdminView(props){
   var companies=props.companies;
   var [allCa,setAllCa]=useState([]);
@@ -392,54 +384,74 @@ function CAAdminView(props){
     }
     load();
   },[]);
-  var globalByMois=useMemo(function(){var r={};moisList.forEach(function(m){r[m]=allCa.filter(function(c){return c.mois===m;}).reduce(function(s,c){return s+(parseFloat(c.montant)||0);},0);});return r;},[allCa,moisList]);
+  var globalByMois=useMemo(function(){
+    var r={};
+    moisList.forEach(function(m){r[m]=allCa.filter(function(c){return c.mois===m;}).reduce(function(s,c){return s+(parseFloat(c.montant)||0);},0);});
+    return r;
+  },[allCa,moisList]);
   function caForCompany(companyId,mois){return allCa.filter(function(c){return c.company_id===companyId&&c.mois===mois;}).reduce(function(s,c){return s+(parseFloat(c.montant)||0);},0);}
   if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"var(--color-text-secondary)"}},"Chargement…");
+  var globalTotal=Object.values(globalByMois).reduce(function(s,v){return s+v;},0);
   return React.createElement("div",null,
     React.createElement("div",{style:{marginBottom:20}},
       React.createElement("div",{style:{fontWeight:500,fontSize:14,marginBottom:12}},"📈 CA Global Réseau par mois"),
       React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
-        moisList.map(function(m){return React.createElement("div",{key:m,style:{flex:1,minWidth:120,background:"var(--color-background-primary)",borderRadius:8,padding:"12px 14px",border:"1px solid var(--color-border-tertiary)"}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4,textTransform:"capitalize"}},fmtMois(m)),React.createElement("div",{style:{fontSize:18,fontWeight:500,color:"#185FA5"}},fmtCA(globalByMois[m]||0)));})
+        moisList.map(function(m){
+          return React.createElement("div",{key:m,style:{flex:1,minWidth:120,background:"var(--color-background-primary)",borderRadius:8,padding:"12px 14px",border:"1px solid var(--color-border-tertiary)"}},
+            React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4,textTransform:"capitalize"}},fmtMois(m)),
+            React.createElement("div",{style:{fontSize:18,fontWeight:500,color:"#185FA5"}},fmtCA(globalByMois[m]||0))
+          );
+        })
       )
     ),
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
       React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:600}},
-        React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
-          React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Société"),
-          React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Réseau"),
-          moisList.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",textTransform:"capitalize"}},fmtMois(m));}),
-          React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
-        )),
+        React.createElement("thead",null,
+          React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+            React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Société"),
+            React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Réseau"),
+            moisList.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",textTransform:"capitalize"}},fmtMois(m));}),
+            React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
+          )
+        ),
         React.createElement("tbody",null,
           companies.map(function(c,ci){
             var net=NETWORKS[c.network];
             var commsForCo=allComm.filter(function(cm){return cm.company_id===c.id;});
             var monthlyCA=moisList.map(function(m){return caForCompany(c.id,m);});
             var total=monthlyCA.reduce(function(s,v){return s+v;},0);
+            var commRows=commsForCo.map(function(comm){
+              var commMonthly=moisList.map(function(m){return allCa.filter(function(c2){return c2.commercial_id===comm.id&&c2.mois===m;}).reduce(function(s,c2){return s+(parseFloat(c2.montant)||0);},0);});
+              var commTotal=commMonthly.reduce(function(s,v){return s+v;},0);
+              if(commTotal===0)return null;
+              return React.createElement("tr",{key:comm.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:"var(--color-background-secondary)"}},
+                React.createElement("td",{style:{padding:"6px 14px 6px 28px",fontSize:12,color:"var(--color-text-secondary)"}},(comm.role==="gerant"?"👔 ":"👤 ")+comm.nom),
+                React.createElement("td",{style:{padding:"6px 14px"}}),
+                commMonthly.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"6px 14px",textAlign:"center",fontSize:12,color:"var(--color-text-secondary)"}},ca>0?fmtCA(ca):"—");}),
+                React.createElement("td",{style:{padding:"6px 14px",textAlign:"center",fontSize:12,color:"var(--color-text-secondary)"}},commTotal>0?fmtCA(commTotal):"—")
+              );
+            });
             return React.createElement(React.Fragment,{key:c.id},
               React.createElement("tr",{style:{borderBottom:"1px solid var(--color-border-tertiary)",background:ci%2===0?"transparent":"var(--color-background-secondary)"}},
-                React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),c.name)),
-                React.createElement("td",{style:{padding:"9px 14px"}},React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)),
+                React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                    React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),
+                    c.name
+                  )
+                ),
+                React.createElement("td",{style:{padding:"9px 14px"}},
+                  React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)
+                ),
                 monthlyCA.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:ca>0?500:400,color:ca>0?net.color:"var(--color-text-tertiary)"}},ca>0?fmtCA(ca):"—");}),
                 React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},total>0?fmtCA(total):"—")
               ),
-              commsForCo.map(function(comm){
-                var commMonthly=moisList.map(function(m){return allCa.filter(function(c2){return c2.commercial_id===comm.id&&c2.mois===m;}).reduce(function(s,c2){return s+(parseFloat(c2.montant)||0);},0);});
-                var commTotal=commMonthly.reduce(function(s,v){return s+v;},0);
-                if(commTotal===0)return null;
-                return React.createElement("tr",{key:comm.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:"var(--color-background-secondary)"}},
-                  React.createElement("td",{style:{padding:"6px 14px 6px 28px",fontSize:12,color:"var(--color-text-secondary)"}},(comm.role==="gerant"?"👔 ":"👤 ")+comm.nom),
-                  React.createElement("td",{style:{padding:"6px 14px"}}),
-                  commMonthly.map(function(ca,mi){return React.createElement("td",{key:moisList[mi],style:{padding:"6px 14px",textAlign:"center",fontSize:12,color:"var(--color-text-secondary)"}},ca>0?fmtCA(ca):"—");}),
-                  React.createElement("td",{style:{padding:"6px 14px",textAlign:"center",fontSize:12,color:"var(--color-text-secondary)"}},commTotal>0?fmtCA(commTotal):"—")
-                );
-              })
+              commRows
             );
           }),
           React.createElement("tr",{style:{background:"var(--color-background-secondary)",borderTop:"2px solid var(--color-border-secondary)"}},
             React.createElement("td",{colSpan:2,style:{padding:"10px 14px",fontWeight:500,fontSize:13}},"TOTAL RÉSEAU"),
             moisList.map(function(m){return React.createElement("td",{key:m,style:{padding:"10px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},fmtCA(globalByMois[m]||0));}),
-            React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},fmtCA(Object.values(globalByMois).reduce(function(s,v){return s+v;},0)))
+            React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},fmtCA(globalTotal))
           )
         )
       )
@@ -460,8 +472,14 @@ function LoginScreen(props){
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:14,border:"1px solid var(--color-border-tertiary)",width:380,padding:28}},
       React.createElement("div",{style:{fontWeight:500,fontSize:17,marginBottom:2}},"Formulaire de prospects"),
       React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:20}},"Google Ads"),
-      React.createElement("div",{style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4}},"Identifiant"),React.createElement("input",{value:login,onChange:function(e){setLogin(e.target.value);},placeholder:"ex: atm83",style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})})),
-      React.createElement("div",{style:{marginBottom:14}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4}},"Mot de passe"),React.createElement("input",{value:pass,type:"password",onChange:function(e){setPass(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();},style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})})),
+      React.createElement("div",{style:{marginBottom:10}},
+        React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4}},"Identifiant"),
+        React.createElement("input",{value:login,onChange:function(e){setLogin(e.target.value);},placeholder:"ex: atm83",style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})})
+      ),
+      React.createElement("div",{style:{marginBottom:14}},
+        React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4}},"Mot de passe"),
+        React.createElement("input",{value:pass,type:"password",onChange:function(e){setPass(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();},style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})})
+      ),
       err&&React.createElement("div",{style:{color:"#A32D2D",fontSize:12,marginBottom:10}},err),
       React.createElement("button",{onClick:submit,style:{width:"100%",padding:"9px 0",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",fontWeight:500,fontSize:14,cursor:"pointer"}},"Se connecter")
     )
@@ -475,14 +493,39 @@ function LeadPanel(props){
   var items=[["📧 Email",lead.email||"—"],["📞 Téléphone",lead.phone||"—"],["📍 Ville",lead.city||(lead.zip?"CP "+lead.zip:"—")],["📅 Reçu le",fmtDate(lead.importedAt)]];
   return React.createElement("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,backdropFilter:"blur(2px)"}},
     React.createElement("div",{style:{background:"#ffffff",borderRadius:14,width:440,maxWidth:"95vw",border:"1px solid #e0e0e0",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.4)"}},
-      React.createElement("div",{style:{background:color,padding:"14px 18px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("div",{style:{fontWeight:500,fontSize:15}},lead.firstName+" "+lead.lastName),React.createElement("button",{onClick:onClose,style:{background:"none",border:"none",color:"#fff",fontSize:18,cursor:"pointer"}},"✕")),
+      React.createElement("div",{style:{background:color,padding:"14px 18px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("div",{style:{fontWeight:500,fontSize:15}},lead.firstName+" "+lead.lastName),
+        React.createElement("button",{onClick:onClose,style:{background:"none",border:"none",color:"#fff",fontSize:18,cursor:"pointer"}},"✕")
+      ),
       React.createElement("div",{style:{padding:20,background:"#ffffff",color:"#1a1a18"}},
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14,fontSize:13}},items.map(function(item){return React.createElement("div",{key:item[0],style:{background:"#f5f5f3",borderRadius:8,padding:"8px 10px"}},React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:2}},item[0]),React.createElement("div",{style:{fontWeight:500,wordBreak:"break-all",color:"#1a1a18"}},item[1]));})
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14,fontSize:13}},
+          items.map(function(item){
+            return React.createElement("div",{key:item[0],style:{background:"#f5f5f3",borderRadius:8,padding:"8px 10px"}},
+              React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:2}},item[0]),
+              React.createElement("div",{style:{fontWeight:500,wordBreak:"break-all",color:"#1a1a18"}},item[1])
+            );
+          })
         ),
-        lead.campaign&&React.createElement("div",{style:{background:"#f5f5f3",borderRadius:8,padding:"8px 10px",marginBottom:10,fontSize:12}},React.createElement("span",{style:{color:"#6b6b67"}},"Campagne : "),React.createElement("b",{style:{color:"#1a1a18"}},lead.campaign)),
-        lead.message&&React.createElement("div",{style:{background:"#f5f5f3",borderRadius:8,padding:"8px 10px",marginBottom:14,fontSize:13}},React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:2}},"Message"),React.createElement("div",{style:{fontStyle:"italic",color:"#1a1a18"}},'"'+lead.message+'"')),
-        React.createElement("div",{style:{marginBottom:12}},React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:6}},"Statut"),React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},statuses.map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setStatus(s.key);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(status===s.key?s.color:"#d0d0cc"),background:status===s.key?s.bg:"transparent",color:status===s.key?s.color:"#6b6b67",fontSize:12,cursor:"pointer",fontWeight:status===s.key?500:400}},s.label);}))),
-        React.createElement("div",{style:{marginBottom:16}},React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:4}},"Note interne"),React.createElement("textarea",{value:note,onChange:function(e){setNote(e.target.value);},rows:3,placeholder:"Ajouter une note...",style:{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #d0d0cc",background:"#fff",color:"#1a1a18",fontSize:13,resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}})),
+        lead.campaign&&React.createElement("div",{style:{background:"#f5f5f3",borderRadius:8,padding:"8px 10px",marginBottom:10,fontSize:12}},
+          React.createElement("span",{style:{color:"#6b6b67"}},"Campagne : "),
+          React.createElement("b",{style:{color:"#1a1a18"}},lead.campaign)
+        ),
+        lead.message&&React.createElement("div",{style:{background:"#f5f5f3",borderRadius:8,padding:"8px 10px",marginBottom:14,fontSize:13}},
+          React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:2}},"Message"),
+          React.createElement("div",{style:{fontStyle:"italic",color:"#1a1a18"}},'"'+lead.message+'"')
+        ),
+        React.createElement("div",{style:{marginBottom:12}},
+          React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:6}},"Statut"),
+          React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+            statuses.map(function(s){
+              return React.createElement("button",{key:s.key,onClick:function(){setStatus(s.key);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(status===s.key?s.color:"#d0d0cc"),background:status===s.key?s.bg:"transparent",color:status===s.key?s.color:"#6b6b67",fontSize:12,cursor:"pointer",fontWeight:status===s.key?500:400}},s.label);
+            })
+          )
+        ),
+        React.createElement("div",{style:{marginBottom:16}},
+          React.createElement("div",{style:{fontSize:11,color:"#6b6b67",marginBottom:4}},"Note interne"),
+          React.createElement("textarea",{value:note,onChange:function(e){setNote(e.target.value);},rows:3,placeholder:"Ajouter une note...",style:{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid #d0d0cc",background:"#fff",color:"#1a1a18",fontSize:13,resize:"vertical",boxSizing:"border-box",fontFamily:"inherit"}})
+        ),
         React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
           React.createElement("button",{onClick:onClose,style:{padding:"7px 16px",borderRadius:8,border:"1px solid #d0d0cc",background:"transparent",cursor:"pointer",fontSize:13,color:"#1a1a18"}},"Annuler"),
           React.createElement("button",{onClick:function(){onSave(lead.id,status,note);onClose();},style:{padding:"7px 16px",borderRadius:8,border:"none",background:color,color:"#fff",fontWeight:500,fontSize:13,cursor:"pointer"}},"Enregistrer")
@@ -494,14 +537,54 @@ function LeadPanel(props){
 
 function LeadsTable(props){
   var leads=props.leads,net=props.net,onPanel=props.onPanel,groupByDept=props.groupByDept,sortDesc=props.sortDesc,onToggleSort=props.onToggleSort,companyId=props.companyId;
-  function renderRow(l,i){return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},React.createElement("td",{style:{padding:"9px 12px",minWidth:120}},React.createElement("div",{style:{fontWeight:500}},l.firstName+" "+l.lastName)),React.createElement("td",{style:{padding:"9px 12px",fontSize:12,minWidth:180,maxWidth:220}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none",wordBreak:"break-all"}},l.email):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap",width:95}},fmtDate(l.importedAt),React.createElement("div",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},fmtTime(l.importedAt))),React.createElement("td",{style:{padding:"9px 12px",fontSize:13,width:90,maxWidth:100}},React.createElement("div",{style:{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},l.city||"—"),l.zip?React.createElement("span",{style:{fontSize:11,color:"var(--color-text-secondary)"}},l.zip):null),React.createElement("td",{style:{padding:"9px 12px",fontSize:13,whiteSpace:"nowrap"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:180}},l.campaign&&React.createElement("div",{style:{fontWeight:500,color:"var(--color-text-primary)",marginBottom:2}},l.campaign),l.message?'"'+l.message.slice(0,60)+(l.message.length>60?"…":"")+'"':"—"),React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:companyId})),React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:140}},l.note?l.note.slice(0,50)+(l.note.length>50?"…":""):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){onPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"Gérer")));}
+  function renderRow(l,i){
+    return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},
+      React.createElement("td",{style:{padding:"9px 12px",minWidth:120}},React.createElement("div",{style:{fontWeight:500}},l.firstName+" "+l.lastName)),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,minWidth:180,maxWidth:220}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none",wordBreak:"break-all"}},l.email):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap",width:95}},fmtDate(l.importedAt),React.createElement("div",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},fmtTime(l.importedAt))),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:13,width:90,maxWidth:100}},React.createElement("div",{style:{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},l.city||"—"),l.zip?React.createElement("span",{style:{fontSize:11,color:"var(--color-text-secondary)"}},l.zip):null),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:13,whiteSpace:"nowrap"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:180}},l.campaign&&React.createElement("div",{style:{fontWeight:500,color:"var(--color-text-primary)",marginBottom:2}},l.campaign),l.message?'"'+l.message.slice(0,60)+(l.message.length>60?"…":"")+'"':"—"),
+      React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:companyId})),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:140}},l.note?l.note.slice(0,50)+(l.note.length>50?"…":""):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),
+      React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){onPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"Gérer"))
+    );
+  }
   var headCols=[["Contact",null],["Email",null],["Date","sort"],["Ville",null],["Téléphone",null],["Campagne / Message",null],["Statut",null],["Note",null],["Action",null]];
-  function renderHead(){return React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},headCols.map(function(item){var isSort=item[1]==="sort";return React.createElement("th",{key:item[0],onClick:isSort?onToggleSort:undefined,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",cursor:isSort?"pointer":"default",userSelect:"none"}},isSort?React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4}},item[0],React.createElement("span",{style:{fontSize:14,color:net.color,fontWeight:700}},sortDesc?"↓":"↑")):item[0]);}));}
-  function renderTable(rowList,xStyle){return React.createElement("div",{style:Object.assign({background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"},xStyle||{})},React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:800}},React.createElement("thead",null,renderHead()),React.createElement("tbody",null,rowList,leads.length===0&&React.createElement("tr",null,React.createElement("td",{colSpan:9,style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)",fontSize:13}},"Aucun lead ne correspond.")))));}
+  function renderHead(){
+    return React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+      headCols.map(function(item){
+        var isSort=item[1]==="sort";
+        return React.createElement("th",{key:item[0],onClick:isSort?onToggleSort:undefined,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",cursor:isSort?"pointer":"default",userSelect:"none"}},
+          isSort?React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4}},item[0],React.createElement("span",{style:{fontSize:14,color:net.color,fontWeight:700}},sortDesc?"↓":"↑")):item[0]
+        );
+      })
+    );
+  }
+  function renderTable(rowList,xStyle){
+    return React.createElement("div",{style:Object.assign({background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"},xStyle||{})},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:800}},
+        React.createElement("thead",null,renderHead()),
+        React.createElement("tbody",null,rowList,leads.length===0&&React.createElement("tr",null,React.createElement("td",{colSpan:9,style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)",fontSize:13}},"Aucun lead ne correspond.")))
+      )
+    );
+  }
   if(!groupByDept)return renderTable(leads.map(function(l,i){return renderRow(l,i);}));
-  var groups={};leads.forEach(function(l){var d=(l.zip||"00").slice(0,2).toUpperCase();if(!groups[d])groups[d]=[];groups[d].push(l);});
+  var groups={};
+  leads.forEach(function(l){var d=(l.zip||"00").slice(0,2).toUpperCase();if(!groups[d])groups[d]=[];groups[d].push(l);});
   var depts=Object.keys(groups).sort();
-  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},depts.length===0&&React.createElement("div",{style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)",fontSize:13}},"Aucun lead ne correspond."),depts.map(function(dept){var dl=groups[dept];return React.createElement("div",{key:dept},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},React.createElement("span",{style:{fontWeight:500,color:net.color,fontSize:14}},"📍 Département "+dept),React.createElement("span",{style:{fontSize:12,background:net.color,color:"#fff",borderRadius:9,padding:"1px 8px"}},dl.length+" lead"+(dl.length>1?"s":""))),renderTable(dl.map(function(l,i){return renderRow(l,i);})));})
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+    depts.length===0&&React.createElement("div",{style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)",fontSize:13}},"Aucun lead ne correspond."),
+    depts.map(function(dept){
+      var dl=groups[dept];
+      return React.createElement("div",{key:dept},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},
+          React.createElement("span",{style:{fontWeight:500,color:net.color,fontSize:14}},"📍 Département "+dept),
+          React.createElement("span",{style:{fontSize:12,background:net.color,color:"#fff",borderRadius:9,padding:"1px 8px"}},dl.length+" lead"+(dl.length>1?"s":""))
+        ),
+        renderTable(dl.map(function(l,i){return renderRow(l,i);}))
+      );
+    })
   );
 }
 
@@ -515,30 +598,57 @@ function CompanyView(props){
   var [sortDesc,setSortDesc]=useState(true),[page,setPage]=useState(1);
   var myLeads=useMemo(function(){return leads.filter(function(l){return l.companyId===company.id;});},[leads,company.id]);
   var shown=useMemo(function(){
-    var filtered=myLeads.filter(function(l){var matchStatus=filter==="spam"?l.status==="spam":filter==="tous"?l.status!=="spam":l.status===filter;var q=search.toLowerCase();var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.zip,l.message,l.campaign].some(function(v){return(v||"").toLowerCase().includes(q);});var lDate=parseLeadDate(l.importedAt);var matchFrom=!dateFrom||!lDate||lDate>=new Date(dateFrom);var matchTo=!dateTo||!lDate||lDate<=new Date(dateTo+"T23:59:59");return matchStatus&&matchSearch&&matchFrom&&matchTo;});
+    var filtered=myLeads.filter(function(l){
+      var matchStatus=filter==="spam"?l.status==="spam":filter==="tous"?l.status!=="spam":l.status===filter;
+      var q=search.toLowerCase();
+      var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.zip,l.message,l.campaign].some(function(v){return(v||"").toLowerCase().includes(q);});
+      var lDate=parseLeadDate(l.importedAt);
+      var matchFrom=!dateFrom||!lDate||lDate>=new Date(dateFrom);
+      var matchTo=!dateTo||!lDate||lDate<=new Date(dateTo+"T23:59:59");
+      return matchStatus&&matchSearch&&matchFrom&&matchTo;
+    });
     filtered.sort(function(a,b){var da=parseLeadDate(a.importedAt)||new Date(0),db=parseLeadDate(b.importedAt)||new Date(0);return sortDesc?db-da:da-db;});
     return filtered;
   },[myLeads,filter,search,dateFrom,dateTo,sortDesc]);
   useEffect(function(){setPage(1);},[filter,search,dateFrom,dateTo,sortDesc,groupByDept]);
   var totalPages=Math.max(1,Math.ceil(shown.length/PAGE_SIZE));
   var paginated=shown.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
-  var counts=useMemo(function(){var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};statuses.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});return r;},[myLeads,statuses]);
-  async function saveLeadUpdate(id,status,note){await dbUpdate("leads","id=eq."+id,{status:status,note:note});setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});}
+  var counts=useMemo(function(){
+    var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};
+    statuses.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});
+    return r;
+  },[myLeads,statuses]);
+  async function saveLeadUpdate(id,status,note){
+    await dbUpdate("leads","id=eq."+id,{status:status,note:note});
+    setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});
+  }
   function changePage(p){if(p>=1&&p<=totalPages){setPage(p);window.scrollTo(0,0);}}
   return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:15}},company.name),React.createElement("span",{style:{fontSize:12,background:net.light,color:net.color,padding:"2px 8px",borderRadius:10}},net.label)),
-      React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){exportCSV(myLeads,company.name);},style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"⬇ Exporter CSV"),React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion"))
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+        React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:net.color}}),
+        React.createElement("span",{style:{fontWeight:500,fontSize:15}},company.name),
+        React.createElement("span",{style:{fontSize:12,background:net.light,color:net.color,padding:"2px 8px",borderRadius:10}},net.label)
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        React.createElement("button",{onClick:function(){exportCSV(myLeads,company.name);},style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"⬇ Exporter CSV"),
+        React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")
+      )
     ),
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"0 20px",display:"flex"}},
-      [["leads","📋 Mes leads"],["ca","💶 CA Facturé"]].map(function(item){var active=activeTab===item[0];return React.createElement("button",{key:item[0],onClick:function(){setActiveTab(item[0]);},style:{padding:"12px 20px",border:"none",borderBottom:"2px solid "+(active?net.color:"transparent"),background:"transparent",color:active?net.color:"var(--color-text-secondary)",fontWeight:active?500:400,fontSize:13,cursor:"pointer"}},item[1]);})
+      [["leads","📋 Mes leads"],["ca","💶 CA Facturé"]].map(function(item){
+        var active=activeTab===item[0];
+        return React.createElement("button",{key:item[0],onClick:function(){setActiveTab(item[0]);},style:{padding:"12px 20px",border:"none",borderBottom:"2px solid "+(active?net.color:"transparent"),background:"transparent",color:active?net.color:"var(--color-text-secondary)",fontWeight:active?500:400,fontSize:13,cursor:"pointer"}},item[1]);
+      })
     ),
     activeTab==="ca"
       ? React.createElement(CAView,{company:company})
       : React.createElement("div",{style:{padding:16}},
           React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
             React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
-            statuses.map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");})
+            statuses.map(function(s){
+              return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");
+            })
           ),
           React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
             React.createElement("input",{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:"Rechercher par nom, email, ville, CP, campagne...",style:Object.assign({},inp,{flex:2,minWidth:200})}),
@@ -552,10 +662,76 @@ function CompanyView(props){
             React.createElement("button",{onClick:function(){setGroupByDept(function(v){return!v;});},style:{padding:"6px 12px",borderRadius:8,border:"1px solid "+(groupByDept?net.color:"var(--color-border-secondary)"),background:groupByDept?net.light:"transparent",color:groupByDept?net.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:groupByDept?500:400,whiteSpace:"nowrap"}},"📍 "+(groupByDept?"Groupé par dpt":"Grouper par dpt"))
           ),
           myLeads.length===0
-            ?React.createElement("div",{style:{textAlign:"center",padding:60,background:"var(--color-background-primary)",borderRadius:12,border:"1px solid var(--color-border-tertiary)",color:"var(--color-text-secondary)"}},React.createElement("div",{style:{fontSize:32,marginBottom:10}},"📭"),React.createElement("div",{style:{fontWeight:500,marginBottom:4}},"Aucun lead pour le moment"),React.createElement("div",{style:{fontSize:13}},"L'administrateur n'a pas encore importé votre fichier CSV."))
-            :React.createElement(React.Fragment,null,React.createElement(LeadsTable,{leads:paginated,net:net,companyId:company.id,onPanel:function(l){setPanel(l);},groupByDept:groupByDept,sortDesc:sortDesc,onToggleSort:function(){setSortDesc(function(v){return!v;});}}),React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:changePage,color:net.color}))
+            ? React.createElement("div",{style:{textAlign:"center",padding:60,background:"var(--color-background-primary)",borderRadius:12,border:"1px solid var(--color-border-tertiary)",color:"var(--color-text-secondary)"}},
+                React.createElement("div",{style:{fontSize:32,marginBottom:10}},"📭"),
+                React.createElement("div",{style:{fontWeight:500,marginBottom:4}},"Aucun lead pour le moment"),
+                React.createElement("div",{style:{fontSize:13}},"L'administrateur n'a pas encore importé votre fichier CSV.")
+              )
+            : React.createElement(React.Fragment,null,
+                React.createElement(LeadsTable,{leads:paginated,net:net,companyId:company.id,onPanel:function(l){setPanel(l);},groupByDept:groupByDept,sortDesc:sortDesc,onToggleSort:function(){setSortDesc(function(v){return!v;});}}),
+                React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:changePage,color:net.color})
+              )
         ),
     panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:company.id,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
+  );
+}
+
+function OverviewMonthlyTable(props){
+  var leads=props.leads,companies=props.companies,grouped=props.grouped;
+  var months=getMoisList(6);
+  function getMonth(l){
+    var d=parseLeadDate(l.importedAt);
+    if(!d)return null;
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  }
+  return React.createElement("div",{style:{marginBottom:20}},
+    React.createElement("div",{style:{fontWeight:500,fontSize:14,marginBottom:12}},"Leads par société par mois"),
+    React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:500}},
+        React.createElement("thead",null,
+          React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+            React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Société"),
+            React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Réseau"),
+            months.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",textTransform:"capitalize"}},fmtMois(m));}),
+            React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
+          )
+        ),
+        React.createElement("tbody",null,
+          companies.map(function(c,ci){
+            var net=NETWORKS[c.network],cl=grouped[c.id]||[];
+            var mc=months.map(function(m){return cl.filter(function(l){return getMonth(l)===m;}).length;});
+            return React.createElement("tr",{key:c.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:ci%2===0?"transparent":"var(--color-background-secondary)"}},
+              React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                  React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),
+                  c.name
+                )
+              ),
+              React.createElement("td",{style:{padding:"9px 14px"}},
+                React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)
+              ),
+              mc.map(function(count,mi){
+                return React.createElement("td",{key:months[mi],style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:count>0?500:400,color:count>0?net.color:"var(--color-text-tertiary)"}},count>0?count:"—");
+              }),
+              React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},cl.length||"—")
+            );
+          }),
+          React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontWeight:500,borderTop:"2px solid var(--color-border-secondary)"}},
+            React.createElement("td",{style:{padding:"9px 14px",fontSize:13,fontWeight:500}},"TOTAL"),
+            React.createElement("td",{style:{padding:"9px 14px"}}),
+            months.map(function(m){
+              var t=leads.filter(function(l){
+                var d=parseLeadDate(l.importedAt);
+                if(!d)return false;
+                return(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"))===m;
+              }).length;
+              return React.createElement("td",{key:m,style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:500,color:"#185FA5"}},t||"—");
+            }),
+            React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:500,color:"#185FA5"}},leads.length||"—")
+          )
+        )
+      )
+    )
   );
 }
 
@@ -602,17 +778,42 @@ function AdminView(props){
   var allStats=useMemo(function(){return{total:leads.length,byStatus:STATUSES.map(function(s){return Object.assign({},s,{count:leads.filter(function(l){return l.status===s.key;}).length});})};},[leads]);
   var tabs=[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["ca","💶 CA Facturé"],["connexions","Connexions"],["companies","Sociétés"]];
   return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
-    React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},React.createElement("div",{style:{fontWeight:500,fontSize:15}},"🛠 Administration · Plateforme Leads"),React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")),
+    React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",{style:{fontWeight:500,fontSize:15}},"🛠 Administration · Plateforme Leads"),
+      React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")
+    ),
     React.createElement("div",{style:{padding:16}},
-      React.createElement("div",{style:{display:"flex",gap:6,marginBottom:16,borderBottom:"1px solid var(--color-border-tertiary)",paddingBottom:10,flexWrap:"wrap"}},tabs.map(function(item){return React.createElement("button",{key:item[0],onClick:function(){setTab(item[0]);},style:{padding:"6px 16px",borderRadius:8,border:"none",background:tab===item[0]?"var(--color-background-secondary)":"transparent",fontWeight:tab===item[0]?500:400,cursor:"pointer",fontSize:13,color:"var(--color-text-primary)"}},item[1]);})),
-      msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},msg.text,React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")),
+      React.createElement("div",{style:{display:"flex",gap:6,marginBottom:16,borderBottom:"1px solid var(--color-border-tertiary)",paddingBottom:10,flexWrap:"wrap"}},
+        tabs.map(function(item){
+          return React.createElement("button",{key:item[0],onClick:function(){setTab(item[0]);},style:{padding:"6px 16px",borderRadius:8,border:"none",background:tab===item[0]?"var(--color-background-secondary)":"transparent",fontWeight:tab===item[0]?500:400,cursor:"pointer",fontSize:13,color:"var(--color-text-primary)"}},item[1]);
+        })
+      ),
+      msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},
+        msg.text,
+        React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")
+      ),
 
       tab==="import"&&React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20}},
         React.createElement("div",{style:{fontWeight:500,marginBottom:14}},"Importer un fichier CSV Google Ads"),
-        React.createElement("div",{style:{marginBottom:14}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Société destinataire"),["renovation","humidite"].map(function(nk){return React.createElement("div",{key:nk,style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:NETWORKS[nk].color,fontWeight:500,marginBottom:4}},NETWORKS[nk].label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},companies.filter(function(c){return c.network===nk;}).map(function(c){return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"5px 11px",borderRadius:7,border:"1px solid "+(selId===c.id?NETWORKS[nk].color:"var(--color-border-secondary)"),background:selId===c.id?NETWORKS[nk].light:"transparent",color:selId===c.id?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:selId===c.id?500:400}},c.name);})));})
+        React.createElement("div",{style:{marginBottom:14}},
+          React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Société destinataire"),
+          ["renovation","humidite"].map(function(nk){
+            return React.createElement("div",{key:nk,style:{marginBottom:10}},
+              React.createElement("div",{style:{fontSize:11,color:NETWORKS[nk].color,fontWeight:500,marginBottom:4}},NETWORKS[nk].label),
+              React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
+                companies.filter(function(c){return c.network===nk;}).map(function(c){
+                  return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"5px 11px",borderRadius:7,border:"1px solid "+(selId===c.id?NETWORKS[nk].color:"var(--color-border-secondary)"),background:selId===c.id?NETWORKS[nk].light:"transparent",color:selId===c.id?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:selId===c.id?500:400}},c.name);
+                })
+              )
+            );
+          })
         ),
-        selCo&&React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12}},"Société : ",React.createElement("b",{style:{color:NETWORKS[selCo.network].color}},selCo.name)," · "+(grouped[selCo.id]||[]).length+" lead(s) en base"),
-        React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"var(--color-text-secondary)"}},React.createElement("b",{style:{color:"var(--color-text-primary)"}},"Formats acceptés : "),"Google Ads et contacts entreprises — détection automatique."),
+        selCo&&React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12}},
+          "Société : ",React.createElement("b",{style:{color:NETWORKS[selCo.network].color}},selCo.name)," · "+(grouped[selCo.id]||[]).length+" lead(s) en base"
+        ),
+        React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"var(--color-text-secondary)"}},
+          React.createElement("b",{style:{color:"var(--color-text-primary)"}},"Formats acceptés : "),"Google Ads et contacts entreprises — détection automatique."
+        ),
         React.createElement("input",{type:"file",accept:".csv",ref:fileRef,onChange:handleFile,style:{display:"none"}}),
         React.createElement("button",{onClick:function(){if(selId&&!uploading)fileRef.current.click();},style:{padding:"9px 20px",borderRadius:8,border:"none",background:selCo?NETWORKS[selCo.network].color:"#888",color:"#fff",fontWeight:500,fontSize:14,cursor:selCo&&!uploading?"pointer":"not-allowed",opacity:uploading?0.7:1}},uploading?"Import en cours…":"⬆ Choisir le fichier CSV")
       ),
@@ -620,47 +821,152 @@ function AdminView(props){
       tab==="imports"&&React.createElement("div",null,
         React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},importGroups.length+" import(s)"),
         importGroups.length===0&&React.createElement("div",{style:{padding:32,textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)"}},"Aucun import."),
-        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},importGroups.map(function(g){var co=companies.find(function(c){return c.id===g.companyId;}),net=co?NETWORKS[co.network]:NETWORKS.renovation;return React.createElement("div",{key:g.id,style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:"12px 16px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}},React.createElement("div",null,React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:4}},React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500}},co?co.name:"Société inconnue"),React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},g.leads.length+" lead"+(g.leads.length>1?"s":""))),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:6}},g.label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},STATUSES.filter(function(s){return g.leads.some(function(l){return l.status===s.key;});}).map(function(s){return React.createElement("span",{key:s.key,style:{fontSize:11,padding:"1px 8px",borderRadius:8,background:s.bg,color:s.color}},g.leads.filter(function(l){return l.status===s.key;}).length+" "+s.label);}))),React.createElement("button",{onClick:function(){deleteImport(g.id,g.leads.length);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid #F7C1C1",background:"transparent",color:"#A32D2D",fontSize:12,cursor:"pointer",fontWeight:500}},"🗑 Supprimer")));})
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          importGroups.map(function(g){
+            var co=companies.find(function(c){return c.id===g.companyId;}),net=co?NETWORKS[co.network]:NETWORKS.renovation;
+            return React.createElement("div",{key:g.id,style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:"12px 16px"}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}},
+                React.createElement("div",null,
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:4}},
+                    React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),
+                    React.createElement("span",{style:{fontWeight:500}},co?co.name:"Société inconnue"),
+                    React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},g.leads.length+" lead"+(g.leads.length>1?"s":""))
+                  ),
+                  React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:6}},g.label),
+                  React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
+                    STATUSES.filter(function(s){return g.leads.some(function(l){return l.status===s.key;});}).map(function(s){
+                      return React.createElement("span",{key:s.key,style:{fontSize:11,padding:"1px 8px",borderRadius:8,background:s.bg,color:s.color}},g.leads.filter(function(l){return l.status===s.key;}).length+" "+s.label);
+                    })
+                  )
+                ),
+                React.createElement("button",{onClick:function(){deleteImport(g.id,g.leads.length);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid #F7C1C1",background:"transparent",color:"#A32D2D",fontSize:12,cursor:"pointer",fontWeight:500}},"🗑 Supprimer")
+              )
+            );
+          })
         )
       ),
 
       tab==="overview"&&React.createElement("div",null,
         React.createElement("div",{style:{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}},
-          React.createElement("div",{style:{flex:1,minWidth:120,background:"var(--color-background-primary)",borderRadius:8,padding:"12px 16px",border:"1px solid var(--color-border-tertiary)"}},React.createElement("div",{style:{fontSize:26,fontWeight:500,color:"#185FA5"}},allStats.total),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Total leads")),
-          allStats.byStatus.map(function(s){return React.createElement("div",{key:s.key,style:{flex:1,minWidth:100,background:s.bg,borderRadius:8,padding:"12px 16px",border:"1px solid "+s.color+"33"}},React.createElement("div",{style:{fontSize:22,fontWeight:500,color:s.color}},s.count),React.createElement("div",{style:{fontSize:12,color:s.color}},s.label));})
+          React.createElement("div",{style:{flex:1,minWidth:120,background:"var(--color-background-primary)",borderRadius:8,padding:"12px 16px",border:"1px solid var(--color-border-tertiary)"}},
+            React.createElement("div",{style:{fontSize:26,fontWeight:500,color:"#185FA5"}},allStats.total),
+            React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Total leads")
+          ),
+          allStats.byStatus.map(function(s){
+            return React.createElement("div",{key:s.key,style:{flex:1,minWidth:100,background:s.bg,borderRadius:8,padding:"12px 16px",border:"1px solid "+s.color+"33"}},
+              React.createElement("div",{style:{fontSize:22,fontWeight:500,color:s.color}},s.count),
+              React.createElement("div",{style:{fontSize:12,color:s.color}},s.label)
+            );
+          })
         ),
-        (function(){
-          var months=getMoisList(6);
-          function getMonth(l){var d=parseLeadDate(l.importedAt);if(!d)return null;return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
-          return React.createElement("div",{style:{marginBottom:20}},
-            React.createElement("div",{style:{fontWeight:500,fontSize:14,marginBottom:12}},"Leads par société par mois"),
-            React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
-              React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:500}},
-                React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Société"),React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Réseau"),months.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",textTransform:"capitalize"}},fmtMois(m));}),React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total"))),
-                React.createElement("tbody",null,companies.map(function(c,ci){var net=NETWORKS[c.network],cl=grouped[c.id]||[],cSt=getStatuses(c.id);var mc=months.map(function(m){return cl.filter(function(l){return getMonth(l)===m;}).length;});return React.createElement("tr",{key:c.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:ci%2===0?"transparent":"var(--color-background-secondary)"}},React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),c.name)),React.createElement("td",{style:{padding:"9px 14px"}},React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)),mc.map(function(count,mi){return React.createElement("td",{key:months[mi],style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:count>0?500:400,color:count>0?net.color:"var(--color-text-tertiary)"}},count>0?count:"—");}),React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:500,color:"#185FA5",fontSize:13}},cl.length||"—"));}),
-                React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontWeight:500,borderTop:"2px solid var(--color-border-secondary)"}},React.createElement("td",{style:{padding:"9px 14px",fontSize:13,fontWeight:500}},"TOTAL"),React.createElement("td",{style:{padding:"9px 14px"}}),months.map(function(m){var t=leads.filter(function(l){var d=parseLeadDate(l.importedAt);if(!d)return false;return(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"))===m;}).length;return React.createElement("td",{key:m,style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:500,color:"#185FA5"}},t||"—");}),React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontSize:13,fontWeight:500,color:"#185FA5"}},leads.length||"—"))
-                )
-              )
+        React.createElement(OverviewMonthlyTable,{leads:leads,companies:companies,grouped:grouped}),
+        ["renovation","humidite"].map(function(nk){
+          return React.createElement("div",{key:nk,style:{marginBottom:16}},
+            React.createElement("div",{style:{fontSize:12,fontWeight:500,color:NETWORKS[nk].color,marginBottom:6}},NETWORKS[nk].label),
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}},
+              companies.filter(function(c){return c.network===nk;}).map(function(c){
+                var cl=grouped[c.id]||[],nw=cl.filter(function(l){return l.status==="nouveau";}).length,treated=cl.filter(function(l){return l.status!=="nouveau";}).length,pct=cl.length>0?Math.round(treated/cl.length*100):0,cSt=getStatuses(c.id);
+                return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"11px 14px"}},
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
+                    React.createElement("span",{style:{fontWeight:500,fontSize:13}},c.name),
+                    nw>0&&React.createElement("span",{style:{fontSize:10,background:NETWORKS[nk].light,color:NETWORKS[nk].color,borderRadius:9,padding:"1px 7px",fontWeight:500}},nw+" new")
+                  ),
+                  React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:8}},cl.length+" lead"+(cl.length>1?"s":"")+" · "+pct+"% traités"),
+                  cl.length>0&&React.createElement("div",{style:{height:6,borderRadius:3,background:"var(--color-border-tertiary)",marginBottom:8,overflow:"hidden"}},
+                    React.createElement("div",{style:{height:"100%",width:pct+"%",background:NETWORKS[nk].color,borderRadius:3}})
+                  ),
+                  React.createElement("div",{style:{display:"flex",gap:3,flexWrap:"wrap"}},
+                    cSt.filter(function(s){return cl.some(function(l){return l.status===s.key;});}).map(function(s){
+                      return React.createElement("span",{key:s.key,style:{fontSize:10,padding:"1px 6px",borderRadius:6,background:s.bg,color:s.color}},cl.filter(function(l){return l.status===s.key;}).length+" "+s.label);
+                    })
+                  )
+                );
+              })
             )
           );
-        })(),
-        ["renovation","humidite"].map(function(nk){return React.createElement("div",{key:nk,style:{marginBottom:16}},React.createElement("div",{style:{fontSize:12,fontWeight:500,color:NETWORKS[nk].color,marginBottom:6}},NETWORKS[nk].label),React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}},companies.filter(function(c){return c.network===nk;}).map(function(c){var cl=grouped[c.id]||[],nw=cl.filter(function(l){return l.status==="nouveau";}).length,treated=cl.filter(function(l){return l.status!=="nouveau";}).length,pct=cl.length>0?Math.round(treated/cl.length*100):0,cSt=getStatuses(c.id);return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"11px 14px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},React.createElement("span",{style:{fontWeight:500,fontSize:13}},c.name),nw>0&&React.createElement("span",{style:{fontSize:10,background:NETWORKS[nk].light,color:NETWORKS[nk].color,borderRadius:9,padding:"1px 7px",fontWeight:500}},nw+" new")),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:8}},cl.length+" lead"+(cl.length>1?"s":"")+" · "+pct+"% traités"),cl.length>0&&React.createElement("div",{style:{height:6,borderRadius:3,background:"var(--color-border-tertiary)",marginBottom:8,overflow:"hidden"}},React.createElement("div",{style:{height:"100%",width:pct+"%",background:NETWORKS[nk].color,borderRadius:3}})),React.createElement("div",{style:{display:"flex",gap:3,flexWrap:"wrap"}},cSt.filter(function(s){return cl.some(function(l){return l.status===s.key;});}).map(function(s){return React.createElement("span",{key:s.key,style:{fontSize:10,padding:"1px 6px",borderRadius:6,background:s.bg,color:s.color}},cl.filter(function(l){return l.status===s.key;}).length+" "+s.label);})));})
-          );})
+        })
       ),
 
       tab==="ca"&&React.createElement(CAAdminView,{companies:companies}),
 
       tab==="connexions"&&React.createElement("div",null,
         React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},loginHistory.length+" connexion(s)"),
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,marginBottom:20}},companies.map(function(c){var net=NETWORKS[c.network],history=loginHistory.filter(function(h){return h.company_id===c.id;}),last=history[0],lastDate=last?new Date(last.login_at):null,daysSince=lastDate?Math.floor((Date.now()-lastDate)/86400000):null,col=daysSince===null?"#9c9a94":daysSince===0?"#27500A":daysSince<=3?"#633806":"#A32D2D",bg=daysSince===null?"#f5f5f3":daysSince===0?"#EAF3DE":daysSince<=3?"#FAEEDA":"#FCEBEB",label=daysSince===null?"Jamais connecté":daysSince===0?"Connecté aujourd'hui":daysSince===1?"Il y a 1 jour":"Il y a "+daysSince+" jours";return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"10px 14px"}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:6}},React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:13}},c.name)),React.createElement("div",{style:{fontSize:11,padding:"2px 8px",borderRadius:8,background:bg,color:col,display:"inline-block",marginBottom:4,fontWeight:500}},label),React.createElement("div",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},history.length+" connexion"+(history.length>1?"s":"")+(lastDate?" · "+lastDate.toLocaleDateString("fr-FR")+" "+lastDate.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"")));})),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,marginBottom:20}},
+          companies.map(function(c){
+            var net=NETWORKS[c.network],history=loginHistory.filter(function(h){return h.company_id===c.id;}),last=history[0],lastDate=last?new Date(last.login_at):null,daysSince=lastDate?Math.floor((Date.now()-lastDate)/86400000):null;
+            var col=daysSince===null?"#9c9a94":daysSince===0?"#27500A":daysSince<=3?"#633806":"#A32D2D";
+            var bg=daysSince===null?"#f5f5f3":daysSince===0?"#EAF3DE":daysSince<=3?"#FAEEDA":"#FCEBEB";
+            var label=daysSince===null?"Jamais connecté":daysSince===0?"Connecté aujourd'hui":daysSince===1?"Il y a 1 jour":"Il y a "+daysSince+" jours";
+            return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"10px 14px"}},
+              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:6}},
+                React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),
+                React.createElement("span",{style:{fontWeight:500,fontSize:13}},c.name)
+              ),
+              React.createElement("div",{style:{fontSize:11,padding:"2px 8px",borderRadius:8,background:bg,color:col,display:"inline-block",marginBottom:4,fontWeight:500}},label),
+              React.createElement("div",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},history.length+" connexion"+(history.length>1?"s":"")+(lastDate?" · "+lastDate.toLocaleDateString("fr-FR")+" "+lastDate.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):""))
+            );
+          })
+        ),
         React.createElement("div",{style:{fontWeight:500,fontSize:13,marginBottom:10}},"Journal détaillé"),
         loginHistory.length===0&&React.createElement("div",{style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)"}},"Aucune connexion."),
-        loginHistory.length>0&&React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflow:"hidden"}},React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},["Société","Réseau","Date et heure"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);}))),React.createElement("tbody",null,loginHistory.map(function(h,i){var co=companies.find(function(c){return c.id===h.company_id;}),net=co?NETWORKS[co.network]:NETWORKS.renovation,d=new Date(h.login_at);return React.createElement("tr",{key:h.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},React.createElement("td",{style:{padding:"9px 14px",fontWeight:500}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),h.company_name||"—")),React.createElement("td",{style:{padding:"9px 14px"}},React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)),React.createElement("td",{style:{padding:"9px 14px",fontSize:13,color:"var(--color-text-secondary)"}},d.toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})));})))))
+        loginHistory.length>0&&React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflow:"hidden"}},
+          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
+            React.createElement("thead",null,
+              React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+                ["Société","Réseau","Date et heure"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
+              )
+            ),
+            React.createElement("tbody",null,
+              loginHistory.map(function(h,i){
+                var co=companies.find(function(c){return c.id===h.company_id;}),net=co?NETWORKS[co.network]:NETWORKS.renovation,d=new Date(h.login_at);
+                return React.createElement("tr",{key:h.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},
+                  React.createElement("td",{style:{padding:"9px 14px",fontWeight:500}},
+                    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                      React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),
+                      h.company_name||"—"
+                    )
+                  ),
+                  React.createElement("td",{style:{padding:"9px 14px"}},
+                    React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)
+                  ),
+                  React.createElement("td",{style:{padding:"9px 14px",fontSize:13,color:"var(--color-text-secondary)"}},
+                    d.toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})
+                  )
+                );
+              })
+            )
+          )
+        )
       ),
 
       tab==="companies"&&React.createElement("div",null,
         React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},"Cliquez sur \"Modifier\" pour changer le mot de passe."),
-        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},companies.map(function(c){var net=NETWORKS[c.network],isEdit=editId===c.id;return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid "+(isEdit?net.color:"var(--color-border-tertiary)"),padding:"12px 16px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:14}},c.name),React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Login : ",React.createElement("b",null,c.login))),React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},(grouped[c.id]||[]).length+" leads"),isEdit?React.createElement("button",{onClick:function(){setEditId(null);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Annuler"):React.createElement("button",{onClick:function(){setEditId(c.id);setEditPwd(c.password);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"✏ Modifier mdp"))),isEdit&&React.createElement("div",{style:{marginTop:12,padding:"12px 14px",background:"var(--color-background-secondary)",borderRadius:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Actuel : ",React.createElement("b",null,c.password)),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Nouveau :"),React.createElement("input",{value:editPwd,onChange:function(e){setEditPwd(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&editPwd)savePassword(c.id,editPwd);},placeholder:"Nouveau mot de passe",autoFocus:true,style:{padding:"6px 10px",borderRadius:7,border:"1px solid "+net.color,fontSize:13,background:"var(--color-background-primary)",color:"var(--color-text-primary)",flex:1,minWidth:180,outline:"none"}}),React.createElement("button",{onClick:function(){if(editPwd)savePassword(c.id,editPwd);},disabled:!editPwd,style:{padding:"6px 16px",borderRadius:7,border:"none",background:editPwd?net.color:"#ccc",color:"#fff",fontWeight:500,fontSize:13,cursor:editPwd?"pointer":"not-allowed"}},"✓ Enregistrer")));})
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          companies.map(function(c){
+            var net=NETWORKS[c.network],isEdit=editId===c.id;
+            return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid "+(isEdit?net.color:"var(--color-border-tertiary)"),padding:"12px 16px"}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+                  React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),
+                  React.createElement("span",{style:{fontWeight:500,fontSize:14}},c.name),
+                  React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label),
+                  React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Login : ",React.createElement("b",null,c.login))
+                ),
+                React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+                  React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},(grouped[c.id]||[]).length+" leads"),
+                  isEdit
+                    ? React.createElement("button",{onClick:function(){setEditId(null);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Annuler")
+                    : React.createElement("button",{onClick:function(){setEditId(c.id);setEditPwd(c.password);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"✏ Modifier mdp")
+                )
+              ),
+              isEdit&&React.createElement("div",{style:{marginTop:12,padding:"12px 14px",background:"var(--color-background-secondary)",borderRadius:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+                React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Actuel : ",React.createElement("b",null,c.password)),
+                React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Nouveau :"),
+                React.createElement("input",{value:editPwd,onChange:function(e){setEditPwd(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&editPwd)savePassword(c.id,editPwd);},placeholder:"Nouveau mot de passe",autoFocus:true,style:{padding:"6px 10px",borderRadius:7,border:"1px solid "+net.color,fontSize:13,background:"var(--color-background-primary)",color:"var(--color-text-primary)",flex:1,minWidth:180,outline:"none"}}),
+                React.createElement("button",{onClick:function(){if(editPwd)savePassword(c.id,editPwd);},disabled:!editPwd,style:{padding:"6px 16px",borderRadius:7,border:"none",background:editPwd?net.color:"#ccc",color:"#fff",fontWeight:500,fontSize:13,cursor:editPwd?"pointer":"not-allowed"}},"✓ Enregistrer")
+              )
+            );
+          })
         )
       )
     )
