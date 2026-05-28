@@ -28,7 +28,8 @@ async function dbInsert(table, rows) {
 async function dbInsertOne(table, row) {
   var r = await fetch(SUPABASE_URL + "/rest/v1/" + table, { method: "POST", headers: Object.assign({}, HEADERS, { "Prefer": "return=representation" }), body: JSON.stringify(row) });
   if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  var data = await r.json();
+  return Array.isArray(data) ? data[0] : data;
 }
 async function dbUpdate(table, match, data) {
   var r = await fetch(SUPABASE_URL + "/rest/v1/" + table + "?" + match, { method: "PATCH", headers: Object.assign({}, HEADERS, { "Prefer": "return=minimal" }), body: JSON.stringify(data) });
@@ -356,7 +357,11 @@ function CARow(props){
   var [saved,setSaved]=useState(false);
   useEffect(function(){setVal(props.value||"");setSaved(false);},[props.value]);
   function save(){
-    var n=parseFloat(val.replace(/[^0-9.]/g,""))||0;
+    // Nettoyer : accepte "20000", "20 000", "20000e", "20k", "20K€" etc.
+    var cleaned = val.toLowerCase().replace(/\s/g,"").replace(/€/g,"").replace(/e$/,"").replace(/,/g,".");
+    var multiplier = 1;
+    if(cleaned.endsWith("k")){multiplier=1000;cleaned=cleaned.slice(0,-1);}
+    var n = (parseFloat(cleaned)||0) * multiplier;
     onSave(n);setSaved(true);setTimeout(function(){setSaved(false);},2000);
   }
   var roleColor=comm.role==="gerant"?"#BA7517":"var(--color-text-secondary)";
