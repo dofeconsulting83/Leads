@@ -283,14 +283,19 @@ function CAView(props){
         var ca=await dbSelect("ca_facture","company_id=eq."+company.id);
         var allCa=await dbSelect("ca_facture","select=company_id,mois,montant");
         var glo={};
+        var networkIds={};
+        INIT_COMPANIES.filter(function(c){return c.network===company.network;}).forEach(function(c){networkIds[c.id]=true;});
         var byCompany={};
         (allCa||[]).forEach(function(c){
           var m=c.mois;
-          if(!glo[m])glo[m]=0;
-          glo[m]+=(parseFloat(c.montant)||0);
           if(!byCompany[c.company_id])byCompany[c.company_id]={};
           if(!byCompany[c.company_id][m])byCompany[c.company_id][m]=0;
           byCompany[c.company_id][m]+=(parseFloat(c.montant)||0);
+          // globalCA = seulement les sociétés du même réseau
+          if(networkIds[c.company_id]){
+            if(!glo[m])glo[m]=0;
+            glo[m]+=(parseFloat(c.montant)||0);
+          }
         });
         if(!cancelled){setCommerciaux(comms||[]);setCaData(ca||[]);setGlobalCA(glo);setAllCaByCompany(byCompany);}
       }catch(e){if(!cancelled)setLoadError(e.message||"Erreur chargement");}
