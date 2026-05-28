@@ -353,8 +353,10 @@ function CAAdminView(props){
   var [allCa,setAllCa]=useState([]);
   var [allComm,setAllComm]=useState([]);
   var [loading,setLoading]=useState(true);
+  var [refreshKey,setRefreshKey]=useState(0);
   var moisList=getMoisList(6);
   useEffect(function(){
+    setLoading(true);
     async function load(){
       try{
         var ca=await dbSelect("ca_facture","order=mois.desc");
@@ -365,7 +367,7 @@ function CAAdminView(props){
       setLoading(false);
     }
     load();
-  },[]);
+  },[refreshKey]);
   var globalByMois=useMemo(function(){
     var r={};
     moisList.forEach(function(m){r[m]=allCa.filter(function(c){return c.mois===m;}).reduce(function(s,c){return s+(parseFloat(c.montant)||0);},0);});
@@ -376,7 +378,10 @@ function CAAdminView(props){
   var globalTotal=Object.values(globalByMois).reduce(function(s,v){return s+v;},0);
   return React.createElement("div",null,
     React.createElement("div",{style:{marginBottom:20}},
-      React.createElement("div",{style:{fontWeight:500,fontSize:14,marginBottom:12}},"📈 CA Global Réseau par mois"),
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        React.createElement("div",{style:{fontWeight:500,fontSize:14}},"📈 CA Global Réseau par mois"),
+        React.createElement("button",{onClick:function(){setRefreshKey(function(k){return k+1;});},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"↻ Actualiser")
+      ),
       React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
         moisList.map(function(m){
           return React.createElement("div",{key:m,style:{flex:1,minWidth:120,background:"var(--color-background-primary)",borderRadius:8,padding:"12px 14px",border:"1px solid var(--color-border-tertiary)"}},
