@@ -266,12 +266,17 @@ function CAView(props){
       setCaData(function(prev){return prev.map(function(c){return c.id===existing.id?Object.assign({},c,{montant:montant}):c;});});
     } else {
       var row={id:"ca_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:company.id,commercial_id:commercialId,commercial_nom:commercialNom,mois:moisSel,montant:montant};
-      await dbInsertOne("ca_facture",row);
+      try {
+        await dbInsertOne("ca_facture",row);
+      } catch(e) {}
+      // Mettre à jour le state local immédiatement sans attendre le retour
       setCaData(function(prev){return prev.concat(row);});
     }
     // Rafraîchir le global
-    var allCa=await dbSelect("ca_facture","order=mois.desc");
-    setAllCaData(allCa||[]);
+    try {
+      var allCa=await dbSelect("ca_facture","order=mois.desc");
+      setAllCaData(allCa||[]);
+    } catch(e) {}
   }
 
   // CA total global réseau par mois
@@ -357,11 +362,13 @@ function CARow(props){
   var [saved,setSaved]=useState(false);
   useEffect(function(){setVal(props.value||"");setSaved(false);},[props.value]);
   function save(){
-    // Nettoyer : accepte "20000", "20 000", "20000e", "20k", "20K€" etc.
-    var cleaned = val.toLowerCase().replace(/\s/g,"").replace(/€/g,"").replace(/e$/,"").replace(/,/g,".");
+    var cleaned = val.trim().toLowerCase().replace(/\s/g,"").replace(/€/g,"").replace(/,/g,".");
     var multiplier = 1;
     if(cleaned.endsWith("k")){multiplier=1000;cleaned=cleaned.slice(0,-1);}
+    else if(cleaned.endsWith("e")){cleaned=cleaned.slice(0,-1);}
     var n = (parseFloat(cleaned)||0) * multiplier;
+    // Mettre à jour l'affichage immédiatement
+    setVal(String(n));
     onSave(n);setSaved(true);setTimeout(function(){setSaved(false);},2000);
   }
   var roleColor=comm.role==="gerant"?"#BA7517":"var(--color-text-secondary)";
