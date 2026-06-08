@@ -47,25 +47,16 @@ var NETWORKS = {
   humidite:   { label: "MurHumide", color: "#0F6E56", light: "#E1F5EE" }
 };
 var STATUSES = [
-  { key: "nouveau",  label: "Nouveau",    bg: "#E6F1FB", color: "#0C447C" },
-  { key: "contacte", label: "Contacté",   bg: "#FAEEDA", color: "#633806" },
-  { key: "rappeler", label: "À rappeler", bg: "#EEEDFE", color: "#3C3489" },
-  { key: "gagne",    label: "Gagné",      bg: "#EAF3DE", color: "#27500A" },
-  { key: "perdu",    label: "Perdu",      bg: "#FCEBEB", color: "#791F1F" },
-  { key: "spam",     label: "Spam",       bg: "#F0F0F0", color: "#666666" }
+  { key: "nouveau",    label: "Nouveau",     bg: "#E6F1FB", color: "#0C447C" },
+  { key: "contacte",   label: "Contacté",    bg: "#FAEEDA", color: "#633806" },
+  { key: "rappeler",   label: "À rappeler",  bg: "#EEEDFE", color: "#3C3489" },
+  { key: "rendezvous", label: "Rendez-vous", bg: "#E6F9F1", color: "#0F6E56" },
+  { key: "signe",      label: "Signé",       bg: "#EAF3DE", color: "#27500A" },
+  { key: "perdu",      label: "Perdu",       bg: "#FCEBEB", color: "#791F1F" },
+  { key: "spam",       label: "Spam",        bg: "#F0F0F0", color: "#666666" }
 ];
-var CUSTOM_STATUSES = {
-  "c2": [
-    { key: "nouveau",    label: "Nouveau",     bg: "#E6F1FB", color: "#0C447C" },
-    { key: "contacte",   label: "Contacté",    bg: "#FAEEDA", color: "#633806" },
-    { key: "rappeler",   label: "À rappeler",  bg: "#EEEDFE", color: "#3C3489" },
-    { key: "rendezvous", label: "Rendez-vous", bg: "#E6F9F1", color: "#0F6E56" },
-    { key: "signe",      label: "Signé",       bg: "#EAF3DE", color: "#27500A" },
-    { key: "perdu",      label: "Perdu",       bg: "#FCEBEB", color: "#791F1F" },
-    { key: "spam",       label: "Spam",        bg: "#F0F0F0", color: "#666666" }
-  ]
-};
-function getStatuses(companyId) { return CUSTOM_STATUSES[companyId] || STATUSES; }
+var CUSTOM_STATUSES = {};
+function getStatuses(companyId) { return STATUSES; }
 
 var INIT_COMPANIES = [
   { id:"c2",  name:"13 ATM",  network:"renovation", login:"atm13",  password:"1234", email:"13atm@atriome.fr" },
