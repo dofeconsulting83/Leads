@@ -688,15 +688,21 @@ function CAAdminView(props){
 
 function LoginScreen(props){
   var onLogin=props.onLogin,companies=props.companies,mh76Commerciaux=props.mh76Commerciaux||[];
-  var [login,setLogin]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState("");
-  function submit(){
+  var [login,setLogin]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState(""),[checking,setChecking]=useState(false);
+  async function submit(){
     if(login===ADMIN.login&&pass===ADMIN.password){onLogin({role:"admin"});return;}
-    // 76MH admin
     if(login===MH76_ADMIN.login&&pass===MH76_ADMIN.password){onLogin({role:"mh76admin",companyId:"c19"});return;}
-    // 76MH commerciaux
+    // Essai commercial 76MH — d'abord dans le cache, sinon refetch
     var comm=mh76Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
+    if(!comm){
+      setChecking(true);
+      try{
+        var rows=await dbSelect("mh76_commerciaux","login=eq."+encodeURIComponent(login));
+        comm=(rows||[]).find(function(c){return c.password===pass;});
+      }catch(e){}
+      setChecking(false);
+    }
     if(comm){onLogin({role:"mh76commercial",commercialId:comm.id});return;}
-    // Sociétés normales
     var co=companies.find(function(c){return c.login===login&&c.password===pass;});
     if(co){dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name}).catch(function(){});onLogin({role:"company",companyId:co.id});return;}
     setErr("Identifiants incorrects.");
@@ -708,7 +714,7 @@ function LoginScreen(props){
       React.createElement("div",{style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4}},"Identifiant"),React.createElement("input",{value:login,onChange:function(e){setLogin(e.target.value);},placeholder:"ex: atm83",style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})})),
       React.createElement("div",{style:{marginBottom:14}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4}},"Mot de passe"),React.createElement("input",{value:pass,type:"password",onChange:function(e){setPass(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")submit();},style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})})),
       err&&React.createElement("div",{style:{color:"#A32D2D",fontSize:12,marginBottom:10}},err),
-      React.createElement("button",{onClick:submit,style:{width:"100%",padding:"9px 0",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",fontWeight:500,fontSize:14,cursor:"pointer"}},"Se connecter")
+      React.createElement("button",{onClick:submit,disabled:checking,style:{width:"100%",padding:"9px 0",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",fontWeight:500,fontSize:14,cursor:checking?"not-allowed":"pointer",opacity:checking?0.7:1}},checking?"Vérification…":"Se connecter")
     )
   );
 }
