@@ -1200,6 +1200,9 @@ function MH76AdminView(props){
   var [search,setSearch]=useState("");
   var [sortDesc,setSortDesc]=useState(true);
   var [page,setPage]=useState(1);
+  var [dateFrom,setDateFrom]=useState("");
+  var [dateTo,setDateTo]=useState("");
+  var [groupByDept,setGroupByDept]=useState(false);
   // Création commercial
   var [newLogin,setNewLogin]=useState("");
   var [newPwd,setNewPwd]=useState("");
@@ -1217,11 +1220,14 @@ function MH76AdminView(props){
       var matchStatus=filter==="spam"?l.status==="spam":filter==="tous"?l.status!=="spam":l.status===filter;
       var q=search.toLowerCase();
       var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.campaign].some(function(v){return(v||"").toLowerCase().includes(q);});
-      return matchStatus&&matchSearch;
+      var lDate=parseLeadDate(l.importedAt);
+      var matchFrom=!dateFrom||!lDate||lDate>=new Date(dateFrom);
+      var matchTo=!dateTo||!lDate||lDate<=new Date(dateTo+"T23:59:59");
+      return matchStatus&&matchSearch&&matchFrom&&matchTo;
     });
     filtered.sort(function(a,b){var da=parseLeadDate(a.importedAt)||new Date(0),db=parseLeadDate(b.importedAt)||new Date(0);return sortDesc?db-da:da-db;});
     return filtered;
-  },[myLeads,filter,search,sortDesc]);
+  },[myLeads,filter,search,sortDesc,dateFrom,dateTo]);
 
   var totalPages=Math.max(1,Math.ceil(shown.length/PAGE_SIZE));
   var paginated=shown.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
@@ -1321,7 +1327,17 @@ function MH76AdminView(props){
           React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
           STATUSES.filter(function(s){return s.key!=="spam";}).map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 12px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");})
         ),
-        React.createElement("input",{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:"Rechercher…",style:Object.assign({},inp,{width:"100%",boxSizing:"border-box",marginBottom:12})}),
+        React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
+          React.createElement("input",{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:"Rechercher par nom, email, ville, CP, campagne...",style:Object.assign({},inp,{flex:2,minWidth:200})}),
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:260}},
+            React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Du"),
+            React.createElement("input",{type:"date",value:dateFrom,onChange:function(e){setDateFrom(e.target.value);},style:Object.assign({},inp,{flex:1})}),
+            React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"au"),
+            React.createElement("input",{type:"date",value:dateTo,onChange:function(e){setDateTo(e.target.value);},style:Object.assign({},inp,{flex:1})}),
+            (dateFrom||dateTo)&&React.createElement("button",{onClick:function(){setDateFrom("");setDateTo("");},style:{padding:"5px 8px",borderRadius:6,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"✕")
+          ),
+          React.createElement("button",{onClick:function(){setGroupByDept(function(v){return!v;});},style:{padding:"6px 12px",borderRadius:8,border:"1px solid "+(groupByDept?net.color:"var(--color-border-secondary)"),background:groupByDept?net.light:"transparent",color:groupByDept?net.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:groupByDept?500:400,whiteSpace:"nowrap"}},"📍 "+(groupByDept?"Groupé par dpt":"Grouper par dpt"))
+        ),
         // Tableau
         React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
           React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:700,fontSize:12}},
