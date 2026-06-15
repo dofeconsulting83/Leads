@@ -1289,7 +1289,7 @@ function MH76AdminView(props){
       React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")
     ),
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"0 20px",display:"flex"}},
-      [["leads","📋 Leads"],["commerciaux","👥 Commerciaux"]].map(function(item){
+      [["leads","📋 Leads"],["ca","💶 CA Facturé"],["commerciaux","👥 Commerciaux"]].map(function(item){
         var active=tab===item[0];
         return React.createElement("button",{key:item[0],onClick:function(){setTab(item[0]);},style:{padding:"12px 20px",border:"none",borderBottom:"2px solid "+(active?net.color:"transparent"),background:"transparent",color:active?net.color:"var(--color-text-secondary)",fontWeight:active?500:400,fontSize:13,cursor:"pointer"}},item[1]);
       })
@@ -1344,6 +1344,10 @@ function MH76AdminView(props){
         React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color})
       ),
 
+      // CA tab — always mounted to preserve state
+      React.createElement("div",{style:{display:tab==="ca"?"block":"none"}},
+        React.createElement(CAView,{company:{id:"c19",name:"76 MH",network:"humidite"},companies:props.companies||INIT_COMPANIES})
+      ),
       tab==="commerciaux"&&React.createElement("div",null,
         // Créer commercial
         React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:16}},
@@ -1404,7 +1408,7 @@ export default function App(){
   if(dbError)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--color-background-tertiary)",flexDirection:"column",gap:12,padding:24}},React.createElement("div",{style:{fontSize:28}},"⚠️"),React.createElement("div",{style:{fontWeight:500,color:"#A32D2D"}},"Erreur de connexion Supabase"),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},dbError));
   if(!session)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux});
   if(session.role==="admin")return React.createElement(AdminView,{leads:leads,setLeads:setLeads,companies:companies,setCompanies:setCompanies,onLogout:handleLogout});
-  if(session.role==="mh76admin")return React.createElement(MH76AdminView,{leads:leads,setLeads:setLeads,onLogout:handleLogout});
+  if(session.role==="mh76admin")return React.createElement(MH76AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
   if(session.role==="mh76commercial"){
     var comm=mh76Commerciaux.find(function(c){return c.id===session.commercialId;});
     if(!comm)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux});
