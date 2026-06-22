@@ -581,7 +581,7 @@ function CAAdminView(props){
     load();
   },[]);
 
-  var netCompanies=useMemo(function(){return companies.filter(function(c){return c.network===networkSel;});},[companies,networkSel]);
+  var netCompanies=useMemo(function(){return companies.filter(function(c){return c.network===networkSel;}).slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});});},[companies,networkSel]);
   var net=NETWORKS[networkSel];
 
   var globalByMois=useMemo(function(){
@@ -921,7 +921,7 @@ function OverviewMonthlyTable(props){
           React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
         )),
         React.createElement("tbody",null,
-          companies.map(function(c,ci){
+          companies.slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});}).map(function(c,ci){
             var net=NETWORKS[c.network],cl=grouped[c.id]||[];
             var mc=months.map(function(m){return cl.filter(function(l){return getMonth(l)===m;}).length;});
             return React.createElement("tr",{key:c.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:ci%2===0?"transparent":"var(--color-background-secondary)"}},
@@ -1009,7 +1009,7 @@ function AdminView(props){
             return React.createElement("div",{key:nk,style:{marginBottom:10}},
               React.createElement("div",{style:{fontSize:11,color:NETWORKS[nk].color,fontWeight:500,marginBottom:4}},NETWORKS[nk].label),
               React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
-                companies.filter(function(c){return c.network===nk;}).map(function(c){
+                companies.filter(function(c){return c.network===nk;}).slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});}).map(function(c){
                   return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"5px 11px",borderRadius:7,border:"1px solid "+(selId===c.id?NETWORKS[nk].color:"var(--color-border-secondary)"),background:selId===c.id?NETWORKS[nk].light:"transparent",color:selId===c.id?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:selId===c.id?500:400}},c.name);
                 })
               )
@@ -1052,7 +1052,7 @@ function AdminView(props){
           return React.createElement("div",{key:nk,style:{marginBottom:16}},
             React.createElement("div",{style:{fontSize:12,fontWeight:500,color:NETWORKS[nk].color,marginBottom:6}},NETWORKS[nk].label),
             React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}},
-              companies.filter(function(c){return c.network===nk;}).map(function(c){
+              companies.filter(function(c){return c.network===nk;}).slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});}).map(function(c){
                 var cl=grouped[c.id]||[],nw=cl.filter(function(l){return l.status==="nouveau";}).length,treated=cl.filter(function(l){return l.status!=="nouveau";}).length,pct=cl.length>0?Math.round(treated/cl.length*100):0,cSt=getStatuses(c.id);
                 return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"11px 14px"}},
                   React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},React.createElement("span",{style:{fontWeight:500,fontSize:13}},c.name),nw>0&&React.createElement("span",{style:{fontSize:10,background:NETWORKS[nk].light,color:NETWORKS[nk].color,borderRadius:9,padding:"1px 7px",fontWeight:500}},nw+" new")),
