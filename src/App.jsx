@@ -1290,29 +1290,49 @@ function MH30AdminView(props){
           ),
           React.createElement("button",{onClick:function(){setGroupByDept(function(v){return!v;});},style:{padding:"6px 12px",borderRadius:8,border:"1px solid "+(groupByDept?net.color:"var(--color-border-secondary)"),background:groupByDept?net.light:"transparent",color:groupByDept?net.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:groupByDept?500:400,whiteSpace:"nowrap"}},"📍 "+(groupByDept?"Groupé par dpt":"Grouper par dpt"))
         ),
-        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
-          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:700,fontSize:12}},
-            React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
-              React.createElement("th",{style:{padding:"8px 12px",borderBottom:"1px solid var(--color-border-tertiary)"}},React.createElement("input",{type:"checkbox",checked:paginated.length>0&&paginated.every(function(l){return selected[l.id];}),onChange:toggleAll,style:{cursor:"pointer"}})),
-              ["Contact","Email","Téléphone","Ville","Date","Statut","Assigné à","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
-            )),
-            React.createElement("tbody",null,paginated.map(function(l,i){
-              var comm=l.assignedTo?commerciaux.find(function(c){return c.id===l.assignedTo;}):null;
-              return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:selected[l.id]?net.light:i%2===0?"transparent":"var(--color-background-secondary)"}},
-                React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("input",{type:"checkbox",checked:!!selected[l.id],onChange:function(){toggleSelect(l.id);},style:{cursor:"pointer"}})),
-                React.createElement("td",{style:{padding:"9px 12px",fontWeight:500}},l.firstName+" "+l.lastName),
-                React.createElement("td",{style:{padding:"9px 12px"}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),
-                React.createElement("td",{style:{padding:"9px 12px"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
-                React.createElement("td",{style:{padding:"9px 12px"}},l.city||"—"),
-                React.createElement("td",{style:{padding:"9px 12px",color:"var(--color-text-secondary)"}},fmtDate(l.importedAt)),
-                React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:"c14"})),
-                React.createElement("td",{style:{padding:"9px 12px"}},comm?React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"2px 8px",borderRadius:8,fontWeight:500}},comm.nom):React.createElement("span",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},"Non assigné")),
-                React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){setPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:11,cursor:"pointer"}},"Gérer"))
+        (function(){
+          function renderTableBody(rows){
+            return React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+              React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:700,fontSize:12}},
+                React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+                  React.createElement("th",{style:{padding:"8px 12px",borderBottom:"1px solid var(--color-border-tertiary)"}},React.createElement("input",{type:"checkbox",checked:paginated.length>0&&paginated.every(function(l){return selected[l.id];}),onChange:toggleAll,style:{cursor:"pointer"}})),
+                  ["Contact","Email","Téléphone","CP / Ville","Date","Statut","Assigné à","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
+                )),
+                React.createElement("tbody",null,rows.map(function(l,i){
+                  var comm=l.assignedTo?commerciaux.find(function(c){return c.id===l.assignedTo;}):null;
+                  return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:selected[l.id]?net.light:i%2===0?"transparent":"var(--color-background-secondary)"}},
+                    React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("input",{type:"checkbox",checked:!!selected[l.id],onChange:function(){toggleSelect(l.id);},style:{cursor:"pointer"}})),
+                    React.createElement("td",{style:{padding:"9px 12px",fontWeight:500}},l.firstName+" "+l.lastName),
+                    React.createElement("td",{style:{padding:"9px 12px"}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),
+                    React.createElement("td",{style:{padding:"9px 12px"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
+                    React.createElement("td",{style:{padding:"9px 12px"}},l.city||(l.zip?"CP "+l.zip:"—")),
+                    React.createElement("td",{style:{padding:"9px 12px",color:"var(--color-text-secondary)"}},fmtDate(l.importedAt)),
+                    React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:"c14"})),
+                    React.createElement("td",{style:{padding:"9px 12px"}},comm?React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"2px 8px",borderRadius:8,fontWeight:500}},comm.nom):React.createElement("span",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},"Non assigné")),
+                    React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){setPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:11,cursor:"pointer"}},"Gérer"))
+                  );
+                }))
+              )
+            );
+          }
+          if(!groupByDept)return React.createElement("div",null,renderTableBody(paginated),React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color}));
+          var groups={};
+          shown.forEach(function(l){var d=(l.zip||"00").slice(0,2).toUpperCase();if(!groups[d])groups[d]=[];groups[d].push(l);});
+          var depts=Object.keys(groups).sort();
+          return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+            depts.length===0&&React.createElement("div",{style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)"}},"Aucun lead."),
+            depts.map(function(dept){
+              var dl=groups[dept];
+              return React.createElement("div",{key:dept},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},
+                  React.createElement("span",{style:{fontWeight:500,color:net.color,fontSize:14}},"📍 Département "+dept),
+                  React.createElement("span",{style:{fontSize:12,background:net.color,color:"#fff",borderRadius:9,padding:"1px 8px"}},dl.length+" lead"+(dl.length>1?"s":""))
+                ),
+                renderTableBody(dl)
               );
-            }))
-          )
-        ),
-        React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color})
+            })
+          );
+        })()
       ),
 
       React.createElement("div",{style:{display:tab==="ca"?"block":"none"}},
@@ -1576,31 +1596,49 @@ function MH76AdminView(props){
           React.createElement("button",{onClick:function(){setGroupByDept(function(v){return!v;});},style:{padding:"6px 12px",borderRadius:8,border:"1px solid "+(groupByDept?net.color:"var(--color-border-secondary)"),background:groupByDept?net.light:"transparent",color:groupByDept?net.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:groupByDept?500:400,whiteSpace:"nowrap"}},"📍 "+(groupByDept?"Groupé par dpt":"Grouper par dpt"))
         ),
         // Tableau
-        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
-          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:700,fontSize:12}},
-            React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
-              React.createElement("th",{style:{padding:"8px 12px",borderBottom:"1px solid var(--color-border-tertiary)"}},
-                React.createElement("input",{type:"checkbox",checked:paginated.length>0&&paginated.every(function(l){return selected[l.id];}),onChange:toggleAll,style:{cursor:"pointer"}})
-              ),
-              ["Contact","Email","Téléphone","Ville","Date","Statut","Assigné à","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
-            )),
-            React.createElement("tbody",null,paginated.map(function(l,i){
-              var comm=l.assignedTo?commerciaux.find(function(c){return c.id===l.assignedTo;}):null;
-              return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:selected[l.id]?net.light:i%2===0?"transparent":"var(--color-background-secondary)"}},
-                React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("input",{type:"checkbox",checked:!!selected[l.id],onChange:function(){toggleSelect(l.id);},style:{cursor:"pointer"}})),
-                React.createElement("td",{style:{padding:"9px 12px",fontWeight:500}},l.firstName+" "+l.lastName),
-                React.createElement("td",{style:{padding:"9px 12px"}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),
-                React.createElement("td",{style:{padding:"9px 12px"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
-                React.createElement("td",{style:{padding:"9px 12px"}},l.city||"—"),
-                React.createElement("td",{style:{padding:"9px 12px",color:"var(--color-text-secondary)"}},fmtDate(l.importedAt)),
-                React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:"c19"})),
-                React.createElement("td",{style:{padding:"9px 12px"}},comm?React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"2px 8px",borderRadius:8,fontWeight:500}},comm.nom):React.createElement("span",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},"Non assigné")),
-                React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){setPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:11,cursor:"pointer"}},"Gérer"))
+        (function(){
+          function renderTableBody76(rows){
+            return React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+              React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:700,fontSize:12}},
+                React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+                  React.createElement("th",{style:{padding:"8px 12px",borderBottom:"1px solid var(--color-border-tertiary)"}},React.createElement("input",{type:"checkbox",checked:paginated.length>0&&paginated.every(function(l){return selected[l.id];}),onChange:toggleAll,style:{cursor:"pointer"}})),
+                  ["Contact","Email","Téléphone","CP / Ville","Date","Statut","Assigné à","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
+                )),
+                React.createElement("tbody",null,rows.map(function(l,i){
+                  var comm=l.assignedTo?commerciaux.find(function(c){return c.id===l.assignedTo;}):null;
+                  return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:selected[l.id]?net.light:i%2===0?"transparent":"var(--color-background-secondary)"}},
+                    React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("input",{type:"checkbox",checked:!!selected[l.id],onChange:function(){toggleSelect(l.id);},style:{cursor:"pointer"}})),
+                    React.createElement("td",{style:{padding:"9px 12px",fontWeight:500}},l.firstName+" "+l.lastName),
+                    React.createElement("td",{style:{padding:"9px 12px"}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),
+                    React.createElement("td",{style:{padding:"9px 12px"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
+                    React.createElement("td",{style:{padding:"9px 12px"}},l.city||(l.zip?"CP "+l.zip:"—")),
+                    React.createElement("td",{style:{padding:"9px 12px",color:"var(--color-text-secondary)"}},fmtDate(l.importedAt)),
+                    React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:"c19"})),
+                    React.createElement("td",{style:{padding:"9px 12px"}},comm?React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"2px 8px",borderRadius:8,fontWeight:500}},comm.nom):React.createElement("span",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},"Non assigné")),
+                    React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){setPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:11,cursor:"pointer"}},"Gérer"))
+                  );
+                }))
+              )
+            );
+          }
+          if(!groupByDept)return React.createElement("div",null,renderTableBody76(paginated),React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color}));
+          var groups={};
+          shown.forEach(function(l){var d=(l.zip||"00").slice(0,2).toUpperCase();if(!groups[d])groups[d]=[];groups[d].push(l);});
+          var depts=Object.keys(groups).sort();
+          return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+            depts.length===0&&React.createElement("div",{style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)"}},"Aucun lead."),
+            depts.map(function(dept){
+              var dl=groups[dept];
+              return React.createElement("div",{key:dept},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},
+                  React.createElement("span",{style:{fontWeight:500,color:net.color,fontSize:14}},"📍 Département "+dept),
+                  React.createElement("span",{style:{fontSize:12,background:net.color,color:"#fff",borderRadius:9,padding:"1px 8px"}},dl.length+" lead"+(dl.length>1?"s":""))
+                ),
+                renderTableBody76(dl)
               );
-            }))
-          )
-        ),
-        React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color})
+            })
+          );
+        })()
       ),
 
       // CA tab — always mounted to preserve state
