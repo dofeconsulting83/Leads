@@ -62,7 +62,7 @@ var INIT_COMPANIES = [
   { id:"c2",  name:"13 ATM",  network:"renovation", login:"atm13",  password:"1234", email:"13atm@atriome.fr" },
   { id:"c3",  name:"14 ATM",  network:"renovation", login:"atm14",  password:"1234", email:"14atm@atriome.fr" },
   { id:"c4",  name:"35 ATM",  network:"renovation", login:"atm35",  password:"1234", email:"35atm@atriome.fr" },
-  { id:"c5",  name:"52 ATM",  network:"renovation", login:"atm52",  password:"1234", email:"52atm@atriome.fr" },
+  { id:"c5",  name:"52 ATM",  network:"renovation", login:"atm52",  password:"atm52_societe", email:"52atm@atriome.fr" },
   { id:"c6",  name:"56 ATM",  network:"renovation", login:"atm56",  password:"1234", email:"56atm@atriome.fr" },
   { id:"c7",  name:"60 ATM",  network:"renovation", login:"atm60",  password:"1234", email:"60atm@atriome.fr" },
   { id:"c8",  name:"69 ATM",  network:"renovation", login:"atm69",  password:"1234", email:"69atm@atriome.fr" },
@@ -693,6 +693,7 @@ function LoginScreen(props){
     if(login===ADMIN.login&&pass===ADMIN.password){onLogin({role:"admin"});return;}
     if(login===MH76_ADMIN.login&&pass===MH76_ADMIN.password){onLogin({role:"mh76admin",companyId:"c19"});return;}
     if(login===MH30_ADMIN.login&&pass===MH30_ADMIN.password){onLogin({role:"mh30admin",companyId:"c14"});return;}
+    if(login===ATM52_ADMIN.login&&pass===ATM52_ADMIN.password){onLogin({role:"atm52admin",companyId:"c5"});return;}
     // Essai commercial 76MH — d'abord dans le cache, sinon refetch
     var comm=mh76Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
     if(!comm){
@@ -715,6 +716,14 @@ function LoginScreen(props){
       setChecking(false);
     }
     if(comm30){onLogin({role:"mh30commercial",commercialId:comm30.id});return;}
+    // Essai commercial 52ATM
+    var comm52=props.atm52Commerciaux?props.atm52Commerciaux.find(function(c){return c.login===login&&c.password===pass;}):null;
+    if(!comm52){
+      setChecking(true);
+      try{var rows52=await dbSelect("atm52_commerciaux","login=eq."+encodeURIComponent(login));comm52=(rows52||[]).find(function(c){return c.password===pass;});}catch(e){}
+      setChecking(false);
+    }
+    if(comm52){onLogin({role:"atm52commercial",commercialId:comm52.id});return;}
     var co=companies.find(function(c){return c.login===login&&c.password===pass;});
     if(co){dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name}).catch(function(){});onLogin({role:"company",companyId:co.id});return;}
     setErr("Identifiants incorrects.");
@@ -1119,6 +1128,240 @@ function AdminView(props){
 
 var MH76_ADMIN = { companyId: "c19", login: "mh76", password: "1234" };
 var MH30_ADMIN = { companyId: "c14", login: "mh30", password: "1234" };
+var ATM52_ADMIN = { companyId: "c5",  login: "atm52", password: "1234" };
+
+// ── ATM52 : vue commercial ────────────────────────────────────────────────────
+function ATM52CommercialView(props){
+  var commercial=props.commercial,leads=props.leads,setLeads=props.setLeads,onLogout=props.onLogout;
+  var net=NETWORKS["renovation"];
+  var [panel,setPanel]=useState(null);
+  var [filter,setFilter]=useState("tous");
+  var [search,setSearch]=useState("");
+  var [sortDesc,setSortDesc]=useState(true);
+  var [page,setPage]=useState(1);
+  var myLeads=useMemo(function(){return leads.filter(function(l){return l.companyId==="c5"&&l.assignedTo===commercial.id;});},[leads,commercial.id]);
+  var shown=useMemo(function(){
+    var filtered=myLeads.filter(function(l){
+      var matchStatus=filter==="spam"?l.status==="spam":filter==="tous"?l.status!=="spam":l.status===filter;
+      var q=search.toLowerCase();
+      var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.campaign].some(function(v){return(v||"").toLowerCase().includes(q);});
+      return matchStatus&&matchSearch;
+    });
+    filtered.sort(function(a,b){var da=parseLeadDate(a.importedAt)||new Date(0),db=parseLeadDate(b.importedAt)||new Date(0);return sortDesc?db-da:da-db;});
+    return filtered;
+  },[myLeads,filter,search,sortDesc]);
+  var counts=useMemo(function(){var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};STATUSES.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});return r;},[myLeads]);
+  var paginated=shown.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
+  async function saveLeadUpdate(id,status,note){await dbUpdate("leads","id=eq."+id,{status:status,note:note});setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});}
+  return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
+    React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:15}},commercial.nom),React.createElement("span",{style:{fontSize:12,background:net.light,color:net.color,padding:"2px 8px",borderRadius:10}},"52 ATM")),
+      React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")
+    ),
+    React.createElement("div",{style:{padding:16}},
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
+        React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
+        STATUSES.filter(function(s){return s.key!=="spam";}).map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");})
+      ),
+      React.createElement("input",{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:"Rechercher…",style:Object.assign({},inp,{width:"100%",boxSizing:"border-box",marginBottom:12})}),
+      myLeads.length===0
+        ? React.createElement("div",{style:{textAlign:"center",padding:60,background:"var(--color-background-primary)",borderRadius:12,border:"1px solid var(--color-border-tertiary)",color:"var(--color-text-secondary)"}},React.createElement("div",{style:{fontSize:32,marginBottom:10}},"📭"),React.createElement("div",{style:{fontWeight:500}},"Aucun contact assigné pour le moment"))
+        : React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+            React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:600}},
+              React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},["Contact","Email","Téléphone","CP / Ville","Date","Statut","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);}))),
+              React.createElement("tbody",null,paginated.map(function(l,i){return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},React.createElement("td",{style:{padding:"9px 12px",fontWeight:500}},l.firstName+" "+l.lastName),React.createElement("td",{style:{padding:"9px 12px",fontSize:12}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),React.createElement("td",{style:{padding:"9px 12px",fontSize:12}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),React.createElement("td",{style:{padding:"9px 12px",fontSize:12}},l.city||(l.zip?"CP "+l.zip:"—")),React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)"}},fmtDate(l.importedAt)),React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:"c5"})),React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){setPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:12,cursor:"pointer"}},"Gérer")));})
+              )
+            )
+          ),
+      React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color})
+    ),
+    panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:"c5",onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
+  );
+}
+
+// ── ATM52 : vue admin ─────────────────────────────────────────────────────────
+function ATM52AdminView(props){
+  var leads=props.leads,setLeads=props.setLeads,companies=props.companies,onLogout=props.onLogout;
+  var net=NETWORKS["renovation"];
+  var [commerciaux,setCommerciaux]=useState([]);
+  var [loading,setLoading]=useState(true);
+  var [tab,setTab]=useState("leads");
+  var [selected,setSelected]=useState({});
+  var [assignTarget,setAssignTarget]=useState("");
+  var [assigning,setAssigning]=useState(false);
+  var [msg,setMsg]=useState(null);
+  var [panel,setPanel]=useState(null);
+  var [filter,setFilter]=useState("tous");
+  var [search,setSearch]=useState("");
+  var [sortDesc,setSortDesc]=useState(true);
+  var [page,setPage]=useState(1);
+  var [dateFrom,setDateFrom]=useState("");
+  var [dateTo,setDateTo]=useState("");
+  var [groupByDept,setGroupByDept]=useState(false);
+  var [newLogin,setNewLogin]=useState("");
+  var [newPwd,setNewPwd]=useState("");
+  var [newNom,setNewNom]=useState("");
+  var [creating,setCreating]=useState(false);
+
+  var myLeads=useMemo(function(){return leads.filter(function(l){return l.companyId==="c5";});},[leads]);
+  useEffect(function(){dbSelect("atm52_commerciaux","order=created_at.asc").then(function(rows){setCommerciaux(rows||[]);setLoading(false);}).catch(function(){setLoading(false);});},[] );
+
+  var shown=useMemo(function(){
+    var filtered=myLeads.filter(function(l){
+      var matchStatus=filter==="spam"?l.status==="spam":filter==="tous"?l.status!=="spam":l.status===filter;
+      var q=search.toLowerCase();
+      var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.campaign].some(function(v){return(v||"").toLowerCase().includes(q);});
+      var lDate=parseLeadDate(l.importedAt);
+      var matchFrom=!dateFrom||!lDate||lDate>=new Date(dateFrom);
+      var matchTo=!dateTo||!lDate||lDate<=new Date(dateTo+"T23:59:59");
+      return matchStatus&&matchSearch&&matchFrom&&matchTo;
+    });
+    filtered.sort(function(a,b){var da=parseLeadDate(a.importedAt)||new Date(0),db=parseLeadDate(b.importedAt)||new Date(0);return sortDesc?db-da:da-db;});
+    return filtered;
+  },[myLeads,filter,search,sortDesc,dateFrom,dateTo]);
+
+  var paginated=shown.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
+  var selectedCount=Object.values(selected).filter(Boolean).length;
+  var counts=useMemo(function(){var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};STATUSES.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});return r;},[myLeads]);
+  function toggleSelect(id){setSelected(function(prev){var r=Object.assign({},prev);r[id]=!r[id];return r;});}
+  function toggleAll(){var allSel=paginated.every(function(l){return selected[l.id];});setSelected(function(prev){var r=Object.assign({},prev);paginated.forEach(function(l){r[l.id]=!allSel;});return r;});}
+
+  async function assign(){
+    if(!assignTarget||selectedCount===0)return;
+    var ids=Object.keys(selected).filter(function(id){return selected[id];});
+    var comm=commerciaux.find(function(c){return c.id===assignTarget;});
+    if(!comm)return;
+    setAssigning(true);
+    try{
+      for(var i=0;i<ids.length;i++){await dbUpdate("leads","id=eq."+ids[i],{assigned_to:assignTarget});}
+      setLeads(function(prev){return prev.map(function(l){return ids.indexOf(l.id)>=0?Object.assign({},l,{assignedTo:assignTarget}):l;});});
+      setSelected({});setAssignTarget("");
+      setMsg({type:"ok",text:"✓ "+ids.length+" lead"+(ids.length>1?"s":"")+" assigné"+(ids.length>1?"s":"")+" à "+comm.nom});
+    }catch(e){setMsg({type:"error",text:"Erreur : "+e.message});}
+    setAssigning(false);
+  }
+
+  async function createCommercial(){
+    if(!newLogin.trim()||!newPwd.trim()||!newNom.trim())return;
+    setCreating(true);
+    var row={id:"atm52c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),nom:newNom.trim(),login:newLogin.trim(),password:newPwd.trim()};
+    try{await dbInsertOne("atm52_commerciaux",row);setCommerciaux(function(prev){return prev.concat(row);});setNewLogin("");setNewPwd("");setNewNom("");setMsg({type:"ok",text:"✓ Commercial "+row.nom+" créé."});}
+    catch(e){setMsg({type:"error",text:"Erreur : "+e.message});}
+    setCreating(false);
+  }
+
+  async function deleteCommercial(id){
+    if(!window.confirm("Supprimer ce commercial ?"))return;
+    await dbDelete("atm52_commerciaux","id=eq."+id);
+    var al=myLeads.filter(function(l){return l.assignedTo===id;});
+    for(var i=0;i<al.length;i++){await dbUpdate("leads","id=eq."+al[i].id,{assigned_to:null});}
+    setLeads(function(prev){return prev.map(function(l){return l.assignedTo===id?Object.assign({},l,{assignedTo:null}):l;});});
+    setCommerciaux(function(prev){return prev.filter(function(c){return c.id!==id;});});
+  }
+
+  async function saveLeadUpdate(id,status,note){await dbUpdate("leads","id=eq."+id,{status:status,note:note});setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});}
+
+  if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center"}},"Chargement…");
+
+  function renderTableBody52(rows){
+    return React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:700,fontSize:12}},
+        React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+          React.createElement("th",{style:{padding:"8px 12px",borderBottom:"1px solid var(--color-border-tertiary)"}},React.createElement("input",{type:"checkbox",checked:paginated.length>0&&paginated.every(function(l){return selected[l.id];}),onChange:toggleAll,style:{cursor:"pointer"}})),
+          ["Contact","Email","Téléphone","CP / Ville","Date","Statut","Assigné à","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
+        )),
+        React.createElement("tbody",null,rows.map(function(l,i){
+          var comm=l.assignedTo?commerciaux.find(function(c){return c.id===l.assignedTo;}):null;
+          return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:selected[l.id]?net.light:i%2===0?"transparent":"var(--color-background-secondary)"}},
+            React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("input",{type:"checkbox",checked:!!selected[l.id],onChange:function(){toggleSelect(l.id);},style:{cursor:"pointer"}})),
+            React.createElement("td",{style:{padding:"9px 12px",fontWeight:500}},l.firstName+" "+l.lastName),
+            React.createElement("td",{style:{padding:"9px 12px"}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),
+            React.createElement("td",{style:{padding:"9px 12px"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
+            React.createElement("td",{style:{padding:"9px 12px"}},l.city||(l.zip?"CP "+l.zip:"—")),
+            React.createElement("td",{style:{padding:"9px 12px",color:"var(--color-text-secondary)"}},fmtDate(l.importedAt)),
+            React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:"c5"})),
+            React.createElement("td",{style:{padding:"9px 12px"}},comm?React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"2px 8px",borderRadius:8,fontWeight:500}},comm.nom):React.createElement("span",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},"Non assigné")),
+            React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){setPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:11,cursor:"pointer"}},"Gérer"))
+          );
+        }))
+      )
+    );
+  }
+
+  return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
+    React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:15}},"52 ATM — Admin"),React.createElement("span",{style:{fontSize:12,background:net.light,color:net.color,padding:"2px 8px",borderRadius:10}},"Atriome")),
+      React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")
+    ),
+    React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"0 20px",display:"flex"}},
+      [["leads","📋 Leads"],["ca","💶 CA Facturé"],["commerciaux","👥 Commerciaux"]].map(function(item){var active=tab===item[0];return React.createElement("button",{key:item[0],onClick:function(){setTab(item[0]);},style:{padding:"12px 20px",border:"none",borderBottom:"2px solid "+(active?net.color:"transparent"),background:"transparent",color:active?net.color:"var(--color-text-secondary)",fontWeight:active?500:400,fontSize:13,cursor:"pointer"}},item[1]);})
+    ),
+    React.createElement("div",{style:{padding:16}},
+      msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},msg.text,React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")),
+
+      tab==="leads"&&React.createElement("div",null,
+        selectedCount>0&&React.createElement("div",{style:{background:net.light,border:"1px solid "+net.color,borderRadius:10,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+          React.createElement("span",{style:{fontWeight:500,color:net.color,fontSize:13}},selectedCount+" lead"+(selectedCount>1?"s":"")+" sélectionné"+(selectedCount>1?"s":"")),
+          React.createElement("select",{value:assignTarget,onChange:function(e){setAssignTarget(e.target.value);},style:Object.assign({},inp,{flex:1,minWidth:160})},React.createElement("option",{value:""},"— Choisir un commercial —"),commerciaux.map(function(c){return React.createElement("option",{key:c.id,value:c.id},c.nom);})),
+          React.createElement("button",{onClick:assign,disabled:!assignTarget||assigning,style:{padding:"7px 16px",borderRadius:8,border:"none",background:assignTarget?net.color:"#ccc",color:"#fff",fontWeight:500,fontSize:13,cursor:assignTarget?"pointer":"not-allowed"}},assigning?"…":"✓ Assigner"),
+          React.createElement("button",{onClick:function(){setSelected({});},style:{padding:"7px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Annuler")
+        ),
+        React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+          React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
+          STATUSES.filter(function(s){return s.key!=="spam";}).map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 12px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");})
+        ),
+        React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
+          React.createElement("input",{value:search,onChange:function(e){setSearch(e.target.value);},placeholder:"Rechercher par nom, email, ville, CP, campagne...",style:Object.assign({},inp,{flex:2,minWidth:200})}),
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:260}},
+            React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Du"),
+            React.createElement("input",{type:"date",value:dateFrom,onChange:function(e){setDateFrom(e.target.value);},style:Object.assign({},inp,{flex:1})}),
+            React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"au"),
+            React.createElement("input",{type:"date",value:dateTo,onChange:function(e){setDateTo(e.target.value);},style:Object.assign({},inp,{flex:1})}),
+            (dateFrom||dateTo)&&React.createElement("button",{onClick:function(){setDateFrom("");setDateTo("");},style:{padding:"5px 8px",borderRadius:6,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"✕")
+          ),
+          React.createElement("button",{onClick:function(){setGroupByDept(function(v){return!v;});},style:{padding:"6px 12px",borderRadius:8,border:"1px solid "+(groupByDept?net.color:"var(--color-border-secondary)"),background:groupByDept?net.light:"transparent",color:groupByDept?net.color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:groupByDept?500:400,whiteSpace:"nowrap"}},"📍 "+(groupByDept?"Groupé par dpt":"Grouper par dpt"))
+        ),
+        (function(){
+          if(!groupByDept)return React.createElement("div",null,renderTableBody52(paginated),React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color}));
+          var groups={};shown.forEach(function(l){var d=(l.zip||"00").slice(0,2).toUpperCase();if(!groups[d])groups[d]=[];groups[d].push(l);});
+          var depts=Object.keys(groups).sort();
+          return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+            depts.length===0&&React.createElement("div",{style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)"}},"Aucun lead."),
+            depts.map(function(dept){var dl=groups[dept];return React.createElement("div",{key:dept},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},React.createElement("span",{style:{fontWeight:500,color:net.color,fontSize:14}},"📍 Département "+dept),React.createElement("span",{style:{fontSize:12,background:net.color,color:"#fff",borderRadius:9,padding:"1px 8px"}},dl.length+" lead"+(dl.length>1?"s":""))),renderTableBody52(dl));})
+          );
+        })()
+      ),
+
+      React.createElement("div",{style:{display:tab==="ca"?"block":"none"}},
+        React.createElement(CAView,{company:{id:"c5",name:"52 ATM",network:"renovation"},companies:companies||INIT_COMPANIES})
+      ),
+
+      tab==="commerciaux"&&React.createElement("div",null,
+        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:16}},
+          React.createElement("div",{style:{fontWeight:500,marginBottom:14}},"Créer un commercial"),
+          React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+            React.createElement("input",{value:newNom,onChange:function(e){setNewNom(e.target.value);},placeholder:"Nom complet",style:Object.assign({},inp,{flex:2,minWidth:160})}),
+            React.createElement("input",{value:newLogin,onChange:function(e){setNewLogin(e.target.value);},placeholder:"Login",style:Object.assign({},inp,{flex:1,minWidth:120})}),
+            React.createElement("input",{value:newPwd,onChange:function(e){setNewPwd(e.target.value);},placeholder:"Mot de passe",style:Object.assign({},inp,{flex:1,minWidth:120})}),
+            React.createElement("button",{onClick:createCommercial,disabled:creating||!newLogin||!newPwd||!newNom,style:{padding:"7px 16px",borderRadius:8,border:"none",background:net.color,color:"#fff",fontWeight:500,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",opacity:creating?0.7:1}},creating?"…":"+ Créer")
+          )
+        ),
+        commerciaux.length===0
+          ? React.createElement("div",{style:{padding:32,textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)"}},"Aucun commercial créé.")
+          : React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+              commerciaux.map(function(c){
+                var assignedCount=myLeads.filter(function(l){return l.assignedTo===c.id;}).length;
+                return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}},
+                  React.createElement("div",null,React.createElement("div",{style:{fontWeight:500,fontSize:14}},c.nom),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginTop:2}},"Login : ",React.createElement("b",null,c.login)," · ",assignedCount," lead"+(assignedCount>1?"s":"")+" assigné"+(assignedCount>1?"s":""))),
+                  React.createElement("button",{onClick:function(){deleteCommercial(c.id);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid #F7C1C1",background:"transparent",color:"#A32D2D",fontSize:12,cursor:"pointer"}},"🗑 Supprimer")
+                );
+              })
+            )
+      )
+    ),
+    panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:"c5",onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
+  );
+}
 
 // ── MH30 : vue commercial ─────────────────────────────────────────────────────
 function MH30CommercialView(props){
@@ -1682,6 +1925,7 @@ export default function App(){
   var [companies,setCompanies]=useState(INIT_COMPANIES);
   var [mh76Commerciaux,setMh76Commerciaux]=useState([]);
   var [mh30Commerciaux,setMh30Commerciaux]=useState([]);
+  var [atm52Commerciaux,setAtm52Commerciaux]=useState([]);
   var [loading,setLoading]=useState(true);
   var [dbError,setDbError]=useState(null);
   function handleLogin(s){setSession(s);try{sessionStorage.setItem("leads_session",JSON.stringify(s));}catch(e){}}
@@ -1699,6 +1943,8 @@ export default function App(){
         if(Array.isArray(comms))setMh76Commerciaux(comms);
         var comms30=await dbSelect("mh30_commerciaux","order=created_at.asc");
         if(Array.isArray(comms30))setMh30Commerciaux(comms30);
+        var comms52=await dbSelect("atm52_commerciaux","order=created_at.asc");
+        if(Array.isArray(comms52))setAtm52Commerciaux(comms52);
       }catch(e){setDbError(e&&e.message?e.message:"Erreur réseau");}
       setLoading(false);
     }
@@ -1706,21 +1952,27 @@ export default function App(){
   },[]);
   if(loading)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--color-background-tertiary)",flexDirection:"column",gap:12}},React.createElement("div",{style:{fontSize:28}},"⏳"),React.createElement("div",{style:{fontWeight:500}},"Connexion à la base de données…"),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Supabase · okbtkvjexxhjmbdmorgg"));
   if(dbError)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--color-background-tertiary)",flexDirection:"column",gap:12,padding:24}},React.createElement("div",{style:{fontSize:28}},"⚠️"),React.createElement("div",{style:{fontWeight:500,color:"#A32D2D"}},"Erreur de connexion Supabase"),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},dbError));
-  if(!session)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux});
+  if(!session)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});
   if(session.role==="admin")return React.createElement(AdminView,{leads:leads,setLeads:setLeads,companies:companies,setCompanies:setCompanies,onLogout:handleLogout});
   if(session.role==="mh76admin")return React.createElement(MH76AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
   if(session.role==="mh30admin")return React.createElement(MH30AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
+  if(session.role==="atm52admin")return React.createElement(ATM52AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
   if(session.role==="mh76commercial"){
     var comm=mh76Commerciaux.find(function(c){return c.id===session.commercialId;});
-    if(!comm)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux});
+    if(!comm)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});
     return React.createElement(MH76CommercialView,{commercial:comm,leads:leads,setLeads:setLeads,onLogout:handleLogout});
   }
   if(session.role==="mh30commercial"){
     var comm30=mh30Commerciaux.find(function(c){return c.id===session.commercialId;});
-    if(!comm30)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux});
+    if(!comm30)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});
     return React.createElement(MH30CommercialView,{commercial:comm30,leads:leads,setLeads:setLeads,onLogout:handleLogout});
   }
+  if(session.role==="atm52commercial"){
+    var comm52=atm52Commerciaux.find(function(c){return c.id===session.commercialId;});
+    if(!comm52)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});
+    return React.createElement(ATM52CommercialView,{commercial:comm52,leads:leads,setLeads:setLeads,onLogout:handleLogout});
+  }
   var company=companies.find(function(c){return c.id===session.companyId;});
-  if(!company)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux});
+  if(!company)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});
   return React.createElement(CompanyView,{company:company,leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
 }
