@@ -197,6 +197,8 @@ function exportCSV(leads,name){
   a.download="leads_"+name.replace(/\s/g,"_")+"_"+new Date().toISOString().slice(0,10)+".csv";a.click();
 }
 
+var inp={padding:"7px 10px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"var(--color-background-primary)",color:"var(--color-text-primary)",fontSize:13};
+
 function fmtVille(l){
   var city=l.city&&l.city.trim();
   var zip=l.zip&&l.zip.trim();
