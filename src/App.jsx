@@ -563,22 +563,27 @@ function LeadsTable(props){
   var leads=props.leads,net=props.net,onPanel=props.onPanel,groupByDept=props.groupByDept,sortDesc=props.sortDesc,onToggleSort=props.onToggleSort,companyId=props.companyId;
   function renderRow(l,i){
     return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},fmtDate(l.importedAt),React.createElement("div",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},fmtTime(l.importedAt))),
       React.createElement("td",{style:{padding:"9px 12px",minWidth:120}},React.createElement("div",{style:{fontWeight:500}},l.firstName+" "+l.lastName)),
-      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,minWidth:180,maxWidth:220}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none",wordBreak:"break-all"}},l.email):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),
-      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap",width:95}},fmtDate(l.importedAt),React.createElement("div",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},fmtTime(l.importedAt))),
-      React.createElement("td",{style:{padding:"9px 12px",fontSize:13,width:90,maxWidth:100}},React.createElement("div",{style:{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},fmtVille(l))),
       React.createElement("td",{style:{padding:"9px 12px",fontSize:13,whiteSpace:"nowrap"}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
-      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:180}},l.campaign&&React.createElement("div",{style:{fontWeight:500,color:"var(--color-text-primary)",marginBottom:2}},l.campaign),l.message?'"'+l.message.slice(0,60)+(l.message.length>60?"…":"")+'"':"—"),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,minWidth:160}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none",wordBreak:"break-all"}},l.email):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:13}},React.createElement("div",{style:{whiteSpace:"nowrap"}},fmtVille(l))),
       React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(SourceBadge,{source:l.source})),
       React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:companyId})),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)"}},"—"),
       React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",maxWidth:140}},l.note?l.note.slice(0,50)+(l.note.length>50?"…":""):React.createElement("span",{style:{color:"var(--color-text-tertiary)"}},"—")),
       React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("button",{onClick:function(){onPanel(l);},style:{padding:"4px 10px",borderRadius:6,border:"1px solid "+net.color,background:"transparent",color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"Gérer"))
     );
   }
-  var headCols=[["Contact",null],["Email",null],["Date","sort"],["Ville",null],["Téléphone",null],["Campagne / Message",null],["Origine",null],["Statut",null],["Note",null],["Action",null]];
+  var headCols=[["Date","sort"],["Contact",null],["Téléphone",null],["Email",null],["CP / Ville",null],["Origine",null],["Statut",null],["Assigné à",null],["Note",null],["Action",null]];
   function renderHead(){
     return React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
-      headCols.map(function(item){var isSort=item[1]==="sort";return React.createElement("th",{key:item[0],onClick:isSort?onToggleSort:undefined,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",cursor:isSort?"pointer":"default",userSelect:"none"}},isSort?React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4}},item[0],React.createElement("span",{style:{fontSize:14,color:net.color,fontWeight:700}},sortDesc?"↓":"↑")):item[0]);})
+      headCols.map(function(item){
+        var isSort=item[1]==="sort";
+        return React.createElement("th",{key:item[0],onClick:isSort?onToggleSort:undefined,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap",cursor:isSort?"pointer":"default",userSelect:"none"}},
+          isSort?React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4}},item[0],React.createElement("span",{style:{fontSize:14,color:net.color,fontWeight:700}},sortDesc?"↓":"↑")):item[0]
+        );
+      })
     );
   }
   function renderTable(rowList,xStyle){
