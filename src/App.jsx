@@ -830,11 +830,11 @@ function makeSubAdminTable(paginated,shown,page,net,selected,toggleAll,toggleSel
     var comm=l.assignedTo?commerciaux.find(function(c){return c.id===l.assignedTo;}):null;
     return React.createElement("tr",{key:l.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:selected[l.id]?net.light:i%2===0?"transparent":"var(--color-background-secondary)"}},
       React.createElement("td",{style:{padding:"9px 12px"}},React.createElement("input",{type:"checkbox",checked:!!selected[l.id],onChange:function(){toggleSelect(l.id);},style:{cursor:"pointer"}})),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},fmtDate(l.importedAt)),
       React.createElement("td",{style:{padding:"9px 12px",fontWeight:500}},l.firstName+" "+l.lastName),
-      React.createElement("td",{style:{padding:"9px 12px",fontSize:12}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),
       React.createElement("td",{style:{padding:"9px 12px",fontSize:12}},l.phone?React.createElement("a",{href:"tel:"+l.phone,style:{color:net.color,textDecoration:"none"}},l.phone):"—"),
+      React.createElement("td",{style:{padding:"9px 12px",fontSize:12}},l.email?React.createElement("a",{href:"mailto:"+l.email,style:{color:net.color,textDecoration:"none"}},l.email):"—"),
       React.createElement("td",{style:{padding:"9px 12px",fontSize:12}},fmtVille(l)),
-      React.createElement("td",{style:{padding:"9px 12px",fontSize:12,color:"var(--color-text-secondary)"}},fmtDate(l.importedAt)),
       React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(SourceBadge,{source:l.source})),
       React.createElement("td",{style:{padding:"9px 12px"}},React.createElement(Badge,{statusKey:l.status,companyId:companyId})),
       React.createElement("td",{style:{padding:"9px 12px"}},comm?React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"2px 8px",borderRadius:8,fontWeight:500}},comm.nom):React.createElement("span",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},"Non assigné")),
@@ -845,8 +845,8 @@ function makeSubAdminTable(paginated,shown,page,net,selected,toggleAll,toggleSel
     return React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
       React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:800,fontSize:12}},
         React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
-          React.createElement("th",{style:{padding:"8px 12px",borderBottom:"1px solid var(--color-border-tertiary)"}},React.createElement("input",{type:"checkbox",checked:paginated.length>0&&paginated.every(function(l){return selected[l.id];}),onChange:toggleAll,style:{cursor:"pointer"}})),
-          ["Contact","Email","Téléphone","CP / Ville","Date","Origine","Statut","Assigné à","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
+          React.createElement("th",{style:{padding:"8px 12px",borderBottom:"1px solid var(--color-border-tertiary)"}}),
+          ["Date","Contact","Téléphone","Email","CP / Ville","Origine","Statut","Assigné à","Action"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 12px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
         )),
         React.createElement("tbody",null,rows.map(function(l,i){return renderRow(l,i);}))
       )
