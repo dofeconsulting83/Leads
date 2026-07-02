@@ -994,7 +994,7 @@ function AdminView(props){
   var grouped=useMemo(function(){var r={};companies.forEach(function(c){r[c.id]=leads.filter(function(l){return l.companyId===c.id;});});return r;},[leads,companies]);
   var importGroups=useMemo(function(){var g={};leads.forEach(function(l){if(!l.importId)return;if(!g[l.importId])g[l.importId]={id:l.importId,label:l.importLabel,companyId:l.companyId,leads:[]};g[l.importId].leads.push(l);});return Object.values(g).sort(function(a,b){return b.id.localeCompare(a.id);});},[leads]);
   var allStats=useMemo(function(){return{total:leads.length,byStatus:STATUSES.map(function(s){return Object.assign({},s,{count:leads.filter(function(l){return l.status===s.key;}).length});})};},[leads]);
-  var tabs=[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["ca","💶 CA Facturé"],["stats","📊 Stats Leads"],["connexions","Connexions"],["companies","Sociétés"]];
+  var tabs=[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["ca","💶 CA Facturé"],["stats","📊 Source de contacts"],["connexions","Connexions"],["companies","Sociétés"]];
   return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",{style:{fontWeight:500,fontSize:15}},"🛠 Administration · Plateforme Leads"),
