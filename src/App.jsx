@@ -255,39 +255,41 @@ var STATS_COMPANY_ROWS={
 };
 
 function parseExcelStatsFile(buffer,companies){
-  // Parse XLSX from ArrayBuffer using SheetJS-like approach
-  // Returns { company_id: { source: { mois: val } } }
-  // We use the row positions defined in STATS_COMPANY_ROWS
   return new Promise(function(resolve,reject){
-    try{
-      var data=new Uint8Array(buffer);
-      // Use XLSX lib loaded via CDN
-      var wb=XLSX.read(data,{type:"array"});
-      var ws=wb.Sheets["LEADS-ENTRANTS_2026"];
-      if(!ws){reject(new Error("Onglet 'LEADS-ENTRANTS_2026' introuvable"));return;}
-      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
-      var result={};
-      companies.forEach(function(co){
-        var startRow=STATS_COMPANY_ROWS[co.id];
-        if(startRow===undefined)return;
-        // startRow = company name row (0-based)
-        // startRow+1 = headers
-        // startRow+2..+11 = 10 sources
-        var coData={};
-        STATS_SOURCES.forEach(function(src,si){
-          var srcRow=rows[startRow+2+si];
-          if(!srcRow)return;
-          var monthly={};
-          STATS_MONTHS.forEach(function(m,mi){
-            var val=srcRow[mi+1];
-            monthly[m]=typeof val==="number"?Math.round(val):0;
+    function doWork(XLSX){
+      try{
+        var data=new Uint8Array(buffer);
+        var wb=XLSX.read(data,{type:"array"});
+        var ws=wb.Sheets["LEADS-ENTRANTS_2026"];
+        if(!ws){reject(new Error("Onglet 'LEADS-ENTRANTS_2026' introuvable"));return;}
+        var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+        var result={};
+        companies.forEach(function(co){
+          var startRow=STATS_COMPANY_ROWS[co.id];
+          if(startRow===undefined)return;
+          var coData={};
+          STATS_SOURCES.forEach(function(src,si){
+            var srcRow=rows[startRow+2+si];
+            if(!srcRow)return;
+            var monthly={};
+            STATS_MONTHS.forEach(function(m,mi){
+              var val=srcRow[mi+1];
+              monthly[m]=typeof val==="number"?Math.round(val):0;
+            });
+            coData[src]=monthly;
           });
-          coData[src]=monthly;
+          result[co.id]=coData;
         });
-        result[co.id]=coData;
-      });
-      resolve(result);
-    }catch(e){reject(e);}
+        resolve(result);
+      }catch(e){reject(e);}
+    }
+    // Load SheetJS from CDN if not available
+    if(typeof window.XLSX!=="undefined"){doWork(window.XLSX);return;}
+    var script=document.createElement("script");
+    script.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.onload=function(){doWork(window.XLSX);};
+    script.onerror=function(){reject(new Error("Impossible de charger la librairie XLSX"));};
+    document.head.appendChild(script);
   });
 }
 
