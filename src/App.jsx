@@ -253,6 +253,11 @@ var STATS_COMPANY_ROWS={
   "c14":196,"c15":224,"c16":238,"c17":252,
   "c19":294,"c20":308,"c21":336
 };
+// Lignes totaux réseau (0-based), chaque source sur une ligne consécutive
+var STATS_NETWORK_ROWS={
+  "renovation":183, // row 184 = TOTAL DEVIS SITE ATM, puis +1 par source
+  "humidite":351    // row 352 = TOTAL DEVIS SITE MH
+};
 
 function parseExcelStatsFile(buffer,companies){
   return new Promise(function(resolve,reject){
@@ -264,6 +269,7 @@ function parseExcelStatsFile(buffer,companies){
         if(!ws){reject(new Error("Onglet 'LEADS-ENTRANTS_2026' introuvable"));return;}
         var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
         var result={};
+        // Parse société data
         companies.forEach(function(co){
           var startRow=STATS_COMPANY_ROWS[co.id];
           if(startRow===undefined)return;
@@ -279,6 +285,22 @@ function parseExcelStatsFile(buffer,companies){
             coData[src]=monthly;
           });
           result[co.id]=coData;
+        });
+        // Parse totaux réseau
+        Object.keys(STATS_NETWORK_ROWS).forEach(function(network){
+          var startRow=STATS_NETWORK_ROWS[network];
+          var netData={};
+          STATS_SOURCES.forEach(function(src,si){
+            var srcRow=rows[startRow+si];
+            if(!srcRow)return;
+            var monthly={};
+            STATS_MONTHS.forEach(function(m,mi){
+              var val=srcRow[mi+1];
+              monthly[m]=typeof val==="number"?Math.round(val):0;
+            });
+            netData[src]=monthly;
+          });
+          result["network_"+network]=netData;
         });
         resolve(result);
       }catch(e){reject(e);}
@@ -322,8 +344,7 @@ function LeadsStatsAdminView(props){
             updated_at:new Date().toISOString()
           });
         });
-      });
-      // Upsert all rows
+      });      // Upsert all rows
       var batchSize=50;
       for(var i=0;i<rows.length;i+=batchSize){
         var batch=rows.slice(i,i+batchSize);
@@ -357,37 +378,72 @@ function LeadsStatsAdminView(props){
 function LeadsStatsView(props){
   var company=props.company,net=props.net;
   var [stats,setStats]=useState(null);
+  var [netStats,setNetStats]=useState(null);
   var [loading,setLoading]=useState(true);
   var [annee,setAnnee]=useState("2026");
+  var [viewMode,setViewMode]=useState("societe"); // "societe" or "reseau"
 
   useEffect(function(){
     setLoading(true);
-    dbSelect("leads_stats","company_id=eq."+company.id+"&annee=eq."+annee+"&order=source.asc")
-      .then(function(rows){setStats(rows||[]);setLoading(false);})
-      .catch(function(){setStats([]);setLoading(false);});
-  },[company.id,annee]);
+    var networkKey="network_"+company.network;
+    Promise.all([
+      dbSelect("leads_stats","company_id=eq."+company.id+"&annee=eq."+annee+"&order=source.asc"),
+      dbSelect("leads_stats","company_id=eq."+networkKey+"&annee=eq."+annee+"&order=source.asc")
+    ]).then(function(results){
+      setStats(results[0]||[]);
+      setNetStats(results[1]||[]);
+      setLoading(false);
+    }).catch(function(){setStats([]);setNetStats([]);setLoading(false);});
+  },[company.id,company.network,annee]);
 
-  function exportPDF(){
-    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stats Leads '+company.name+' — '+annee+'</title>'
+  function renderTable(data,title,color){
+    var grandTotal={};STATS_MONTHS.forEach(function(m){grandTotal[m]=0;});
+    var fixedRows=STATS_SOURCES.map(function(src,si){
+      var row=(data||[]).find(function(r){return r.source===src;})||{};
+      var total=STATS_MONTHS.reduce(function(s,m){return s+(row[m]||0);},0);
+      STATS_MONTHS.forEach(function(m){grandTotal[m]+=(row[m]||0);});
+      return React.createElement("tr",{key:src,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:si%2===0?"transparent":"var(--color-background-secondary)"}},
+        React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},src),
+        STATS_MONTHS.map(function(m){var v=row[m]||0;return React.createElement("td",{key:m,style:{padding:"9px 10px",textAlign:"center",color:v>0?color:"var(--color-text-tertiary)",fontWeight:v>0?500:400}},v>0?v:"—");}),
+        React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:700,color:total>0?color:"var(--color-text-tertiary)"}},total>0?total:"—")
+      );
+    });
+    var gt=STATS_MONTHS.reduce(function(s,m){return s+(grandTotal[m]||0);},0);
+    var totalRow=React.createElement("tr",{key:"total",style:{background:net.light,borderTop:"2px solid "+color}},
+      React.createElement("td",{style:{padding:"10px 14px",fontWeight:700,color:color}},"TOTAL"),
+      STATS_MONTHS.map(function(m){var v=grandTotal[m]||0;return React.createElement("td",{key:m,style:{padding:"10px 10px",textAlign:"center",fontWeight:700,color:color}},v>0?v:"—");}),
+      React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:700,color:color}},gt>0?gt:"—")
+    );
+    return React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:900}},
+        React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+          React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Source"),
+          STATS_MONTHS_FR.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 10px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},m.slice(0,3)+".");}),
+          React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
+        )),
+        React.createElement("tbody",null,fixedRows.concat([totalRow]))
+      )
+    );
+  }
+
+  function exportPDF(data,title){
+    var grandTotal={};STATS_MONTHS.forEach(function(m){grandTotal[m]=0;});
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+' — '+annee+'</title>'
       +'<style>*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}body{padding:28px;color:#1a1a18}'
       +'.title{font-size:18px;font-weight:700;color:'+net.color+';margin-bottom:4px}'
       +'.subtitle{font-size:12px;color:#666;margin-bottom:20px}'
       +'table{width:100%;border-collapse:collapse;font-size:11px}'
       +'th{background:'+net.color+';color:#fff;padding:7px 10px;text-align:center;white-space:nowrap}'
-      +'th.left{text-align:left}'
-      +'td{padding:7px 10px;border-bottom:1px solid #eee;text-align:center}'
-      +'td.src{text-align:left;font-weight:500}'
-      +'td.tot{font-weight:700;color:'+net.color+'}'
+      +'th.left{text-align:left}td{padding:7px 10px;border-bottom:1px solid #eee;text-align:center}'
+      +'td.src{text-align:left;font-weight:500}td.tot{font-weight:700;color:'+net.color+'}'
       +'.total-row td{background:'+net.light+';font-weight:700;color:'+net.color+';border-top:2px solid '+net.color+'}'
       +'@media print{body{padding:16px}}</style></head><body>'
-      +'<div class="title">📊 Stats Leads — '+company.name+'</div>'
+      +'<div class="title">📊 '+title+'</div>'
       +'<div class="subtitle">Année '+annee+' · Généré le '+new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})+'</div>'
       +'<table><thead><tr><th class="left">Source</th>'
-      +STATS_MONTHS_FR.map(function(m){return'<th>'+m.slice(0,3)+'</th>';}).join("")
-      +'<th>Total</th></tr></thead><tbody>';
-    var grandTotal={};STATS_MONTHS.forEach(function(m){grandTotal[m]=0;});
+      +STATS_MONTHS_FR.map(function(m){return'<th>'+m.slice(0,3)+'</th>';}).join("")+'<th>Total</th></tr></thead><tbody>';
     STATS_SOURCES.forEach(function(src){
-      var row=stats.find(function(r){return r.source===src;})||{};
+      var row=(data||[]).find(function(r){return r.source===src;})||{};
       var rowTotal=0;
       html+='<tr><td class="src">'+src+'</td>';
       STATS_MONTHS.forEach(function(m){var v=row[m]||0;rowTotal+=v;grandTotal[m]+=v;html+='<td>'+(v>0?v:"—")+'</td>';});
@@ -396,63 +452,42 @@ function LeadsStatsView(props){
     var gt=STATS_MONTHS.reduce(function(s,m){return s+(grandTotal[m]||0);},0);
     html+='<tr class="total-row"><td>TOTAL</td>';
     STATS_MONTHS.forEach(function(m){html+='<td>'+(grandTotal[m]||0)+'</td>';});
-    html+='<td>'+gt+'</td></tr>';
-    html+='</tbody></table></body></html>';
+    html+='<td>'+gt+'</td></tr></tbody></table></body></html>';
     var w=window.open("","_blank","width=1000,height=700");w.document.write(html);w.document.close();w.focus();setTimeout(function(){w.print();},400);
   }
 
   if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"var(--color-text-secondary)"}},"Chargement…");
 
+  var currentData=viewMode==="reseau"?netStats:stats;
+  var currentTitle=viewMode==="reseau"?"Stats Réseau "+NETWORKS[company.network].label:"Stats Leads — "+company.name;
+  var hasData=currentData&&currentData.length>0;
+
   return React.createElement("div",{style:{padding:16}},
     React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}},
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
         React.createElement("div",{style:{fontWeight:500,fontSize:15}},"📊 Contacts entrants"),
         React.createElement("select",{value:annee,onChange:function(e){setAnnee(e.target.value);},style:Object.assign({},inp,{padding:"5px 8px",fontSize:12})},
           ["2024","2025","2026"].map(function(y){return React.createElement("option",{key:y,value:y},y);})
+        ),
+        React.createElement("div",{style:{display:"flex",gap:4,background:"var(--color-background-secondary)",borderRadius:8,padding:3}},
+          [["societe","Ma société"],["reseau","Réseau "+NETWORKS[company.network].label]].map(function(item){
+            var active=viewMode===item[0];
+            return React.createElement("button",{key:item[0],onClick:function(){setViewMode(item[0]);},style:{padding:"5px 12px",borderRadius:6,border:"none",background:active?net.color:"transparent",color:active?"#fff":"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},item[1]);
+          })
         )
       ),
-      stats&&stats.length>0&&React.createElement("button",{onClick:exportPDF,style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"📄 Exporter PDF")
+      hasData&&React.createElement("button",{onClick:function(){exportPDF(currentData,currentTitle);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"📄 Exporter PDF")
     ),
-    !stats||stats.length===0
+    !hasData
       ? React.createElement("div",{style:{padding:40,textAlign:"center",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",color:"var(--color-text-secondary)"}},
           React.createElement("div",{style:{fontSize:28,marginBottom:10}},"📊"),
           React.createElement("div",{style:{fontWeight:500,marginBottom:4}},"Aucune donnée pour "+annee),
           React.createElement("div",{style:{fontSize:13}},"L'administrateur n'a pas encore importé le fichier de statistiques.")
         )
-      : React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
-          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:900}},
-            React.createElement("thead",null,
-              React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
-                React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},"Source"),
-                STATS_MONTHS_FR.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 10px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},m.slice(0,3)+".");}),
-                React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
-              )
-            ),
-            React.createElement("tbody",null,
-              (function(){
-                var grandTotal={};STATS_MONTHS.forEach(function(m){grandTotal[m]=0;});
-                var fixedRows=STATS_SOURCES.map(function(src,si){
-                  var row=stats.find(function(r){return r.source===src;})||{};
-                  var total=STATS_MONTHS.reduce(function(s,m){return s+(row[m]||0);},0);
-                  return React.createElement("tr",{key:src,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:si%2===0?"transparent":"var(--color-background-secondary)"}},
-                    React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},src),
-                    STATS_MONTHS.map(function(m){var v=row[m]||0;return React.createElement("td",{key:m,style:{padding:"9px 10px",textAlign:"center",color:v>0?net.color:"var(--color-text-tertiary)",fontWeight:v>0?500:400}},v>0?v:"—");}),
-                    React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:700,color:total>0?net.color:"var(--color-text-tertiary)"}},total>0?total:"—")
-                  );
-                });
-                var gt=STATS_MONTHS.reduce(function(s,m){return s+(grandTotal[m]||0);},0);
-                var totalRow=React.createElement("tr",{style:{background:net.light,borderTop:"2px solid "+net.color}},
-                  React.createElement("td",{style:{padding:"10px 14px",fontWeight:700,color:net.color}},"TOTAL"),
-                  STATS_MONTHS.map(function(m){var v=grandTotal[m]||0;return React.createElement("td",{key:m,style:{padding:"10px 10px",textAlign:"center",fontWeight:700,color:net.color}},v>0?v:"—");}),
-                  React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:700,color:net.color}},gt>0?gt:"—")
-                );
-                return fixedRows.concat([totalRow]);
-              })()
-            )
-          )
-        )
+      : renderTable(currentData,currentTitle,net.color)
   );
 }
+
 
 function CARow(props){
   var comm=props.comm,color=props.color,initialValue=props.initialValue;
