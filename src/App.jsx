@@ -241,6 +241,217 @@ function Pagination(props){
   );
 }
 
+// ── Mapping société → lignes dans LEADS-ENTRANTS_2026 ──────────────────────
+var STATS_SOURCES=["Devis site","Site local","Chatbot","Local Services","Formulaire Ads","Appels Fiche Google","Solocal","Salons & Foires","N° Vert","Réseaux sociaux"];
+var STATS_MONTHS=["janvier","fevrier","mars","avril","mai","juin","juillet","aout","septembre","octobre","novembre","decembre"];
+var STATS_MONTHS_FR=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+// Mapping company_id → row index (0-based) dans LEADS-ENTRANTS_2026
+var STATS_COMPANY_ROWS={
+  "c2":2,"c3":16,"c4":30,"c5":56,"c6":70,"c7":84,"c8":98,"c9":112,
+  "c10":126,"c11":140,"c12":154,"c13":168,
+  "c14":196,"c15":224,"c16":238,"c17":252,
+  "c19":294,"c20":308,"c21":336
+};
+
+function parseExcelStatsFile(buffer,companies){
+  // Parse XLSX from ArrayBuffer using SheetJS-like approach
+  // Returns { company_id: { source: { mois: val } } }
+  // We use the row positions defined in STATS_COMPANY_ROWS
+  return new Promise(function(resolve,reject){
+    try{
+      var data=new Uint8Array(buffer);
+      // Use XLSX lib loaded via CDN
+      var wb=XLSX.read(data,{type:"array"});
+      var ws=wb.Sheets["LEADS-ENTRANTS_2026"];
+      if(!ws){reject(new Error("Onglet 'LEADS-ENTRANTS_2026' introuvable"));return;}
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+      var result={};
+      companies.forEach(function(co){
+        var startRow=STATS_COMPANY_ROWS[co.id];
+        if(startRow===undefined)return;
+        // startRow = company name row (0-based)
+        // startRow+1 = headers
+        // startRow+2..+11 = 10 sources
+        var coData={};
+        STATS_SOURCES.forEach(function(src,si){
+          var srcRow=rows[startRow+2+si];
+          if(!srcRow)return;
+          var monthly={};
+          STATS_MONTHS.forEach(function(m,mi){
+            var val=srcRow[mi+1];
+            monthly[m]=typeof val==="number"?Math.round(val):0;
+          });
+          coData[src]=monthly;
+        });
+        result[co.id]=coData;
+      });
+      resolve(result);
+    }catch(e){reject(e);}
+  });
+}
+
+// ── Admin : upload Excel stats ────────────────────────────────────────────────
+function LeadsStatsAdminView(props){
+  var companies=props.companies;
+  var [uploading,setUploading]=useState(false);
+  var [msg,setMsg]=useState(null);
+  var [annee,setAnnee]=useState("2026");
+  var fileRef=useRef();
+
+  async function handleFile(e){
+    var f=e.target.files[0];if(!f)return;
+    setUploading(true);setMsg(null);
+    try{
+      var buffer=await f.arrayBuffer();
+      var parsed=await parseExcelStatsFile(buffer,companies);
+      var rows=[];
+      Object.keys(parsed).forEach(function(coId){
+        var coData=parsed[coId];
+        STATS_SOURCES.forEach(function(src){
+          var monthly=coData[src]||{};
+          rows.push({
+            id:"ls_"+coId+"_"+annee+"_"+src.replace(/[^a-z0-9]/gi,"_").toLowerCase(),
+            company_id:coId,annee:parseInt(annee),source:src,
+            janvier:monthly.janvier||0,fevrier:monthly.fevrier||0,mars:monthly.mars||0,
+            avril:monthly.avril||0,mai:monthly.mai||0,juin:monthly.juin||0,
+            juillet:monthly.juillet||0,aout:monthly.aout||0,septembre:monthly.septembre||0,
+            octobre:monthly.octobre||0,novembre:monthly.novembre||0,decembre:monthly.decembre||0,
+            updated_at:new Date().toISOString()
+          });
+        });
+      });
+      // Upsert all rows
+      var batchSize=50;
+      for(var i=0;i<rows.length;i+=batchSize){
+        var batch=rows.slice(i,i+batchSize);
+        var r=await fetch(SUPABASE_URL+"/rest/v1/leads_stats",{method:"POST",headers:Object.assign({},HEADERS,{"Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify(batch)});
+        if(!r.ok)throw new Error(await r.text());
+      }
+      setMsg({type:"ok",text:"✓ "+rows.length+" lignes importées pour "+Object.keys(parsed).length+" sociétés ("+annee+")"});
+    }catch(err){setMsg({type:"error",text:"Erreur : "+err.message});}
+    setUploading(false);e.target.value="";
+  }
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:16}},
+      React.createElement("div",{style:{fontWeight:500,fontSize:15,marginBottom:14}},"📊 Import Stats Leads"),
+      React.createElement("div",{style:{fontSize:13,color:"var(--color-text-secondary)",marginBottom:16}},"Importez le fichier Excel annuel — les données de toutes les sociétés seront mises à jour automatiquement."),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}},
+        React.createElement("span",{style:{fontSize:13,color:"var(--color-text-secondary)"}},"Année :"),
+        React.createElement("select",{value:annee,onChange:function(e){setAnnee(e.target.value);},style:Object.assign({},inp,{padding:"6px 10px"})},
+          ["2024","2025","2026","2027"].map(function(y){return React.createElement("option",{key:y,value:y},y);})
+        )
+      ),
+      msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13}},msg.text),
+      React.createElement("input",{type:"file",accept:".xlsx,.xls",ref:fileRef,onChange:handleFile,style:{display:"none"}}),
+      React.createElement("button",{onClick:function(){if(!uploading)fileRef.current.click();},disabled:uploading,style:{padding:"9px 20px",borderRadius:8,border:"none",background:"#185FA5",color:"#fff",fontWeight:500,fontSize:14,cursor:uploading?"not-allowed":"pointer",opacity:uploading?0.7:1}},uploading?"Import en cours…":"⬆ Choisir le fichier Excel"),
+      React.createElement("div",{style:{marginTop:12,fontSize:12,color:"var(--color-text-secondary)"}},"Format attendu : fichier avec l'onglet 'LEADS-ENTRANTS_2026' (même structure que votre tableau actuel)")
+    )
+  );
+}
+
+// ── Vue société : stats leads ─────────────────────────────────────────────────
+function LeadsStatsView(props){
+  var company=props.company,net=props.net;
+  var [stats,setStats]=useState(null);
+  var [loading,setLoading]=useState(true);
+  var [annee,setAnnee]=useState("2026");
+
+  useEffect(function(){
+    setLoading(true);
+    dbSelect("leads_stats","company_id=eq."+company.id+"&annee=eq."+annee+"&order=source.asc")
+      .then(function(rows){setStats(rows||[]);setLoading(false);})
+      .catch(function(){setStats([]);setLoading(false);});
+  },[company.id,annee]);
+
+  function exportPDF(){
+    var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stats Leads '+company.name+' — '+annee+'</title>'
+      +'<style>*{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}body{padding:28px;color:#1a1a18}'
+      +'.title{font-size:18px;font-weight:700;color:'+net.color+';margin-bottom:4px}'
+      +'.subtitle{font-size:12px;color:#666;margin-bottom:20px}'
+      +'table{width:100%;border-collapse:collapse;font-size:11px}'
+      +'th{background:'+net.color+';color:#fff;padding:7px 10px;text-align:center;white-space:nowrap}'
+      +'th.left{text-align:left}'
+      +'td{padding:7px 10px;border-bottom:1px solid #eee;text-align:center}'
+      +'td.src{text-align:left;font-weight:500}'
+      +'td.tot{font-weight:700;color:'+net.color+'}'
+      +'.total-row td{background:'+net.light+';font-weight:700;color:'+net.color+';border-top:2px solid '+net.color+'}'
+      +'@media print{body{padding:16px}}</style></head><body>'
+      +'<div class="title">📊 Stats Leads — '+company.name+'</div>'
+      +'<div class="subtitle">Année '+annee+' · Généré le '+new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})+'</div>'
+      +'<table><thead><tr><th class="left">Source</th>'
+      +STATS_MONTHS_FR.map(function(m){return'<th>'+m.slice(0,3)+'</th>';}).join("")
+      +'<th>Total</th></tr></thead><tbody>';
+    var grandTotal={};STATS_MONTHS.forEach(function(m){grandTotal[m]=0;});
+    STATS_SOURCES.forEach(function(src){
+      var row=stats.find(function(r){return r.source===src;})||{};
+      var rowTotal=0;
+      html+='<tr><td class="src">'+src+'</td>';
+      STATS_MONTHS.forEach(function(m){var v=row[m]||0;rowTotal+=v;grandTotal[m]+=v;html+='<td>'+(v>0?v:"—")+'</td>';});
+      html+='<td class="tot">'+rowTotal+'</td></tr>';
+    });
+    var gt=STATS_MONTHS.reduce(function(s,m){return s+(grandTotal[m]||0);},0);
+    html+='<tr class="total-row"><td>TOTAL</td>';
+    STATS_MONTHS.forEach(function(m){html+='<td>'+(grandTotal[m]||0)+'</td>';});
+    html+='<td>'+gt+'</td></tr>';
+    html+='</tbody></table></body></html>';
+    var w=window.open("","_blank","width=1000,height=700");w.document.write(html);w.document.close();w.focus();setTimeout(function(){w.print();},400);
+  }
+
+  if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"var(--color-text-secondary)"}},"Chargement…");
+
+  return React.createElement("div",{style:{padding:16}},
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+        React.createElement("div",{style:{fontWeight:500,fontSize:15}},"📊 Contacts entrants"),
+        React.createElement("select",{value:annee,onChange:function(e){setAnnee(e.target.value);},style:Object.assign({},inp,{padding:"5px 8px",fontSize:12})},
+          ["2024","2025","2026"].map(function(y){return React.createElement("option",{key:y,value:y},y);})
+        )
+      ),
+      stats&&stats.length>0&&React.createElement("button",{onClick:exportPDF,style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"📄 Exporter PDF")
+    ),
+    !stats||stats.length===0
+      ? React.createElement("div",{style:{padding:40,textAlign:"center",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",color:"var(--color-text-secondary)"}},
+          React.createElement("div",{style:{fontSize:28,marginBottom:10}},"📊"),
+          React.createElement("div",{style:{fontWeight:500,marginBottom:4}},"Aucune donnée pour "+annee),
+          React.createElement("div",{style:{fontSize:13}},"L'administrateur n'a pas encore importé le fichier de statistiques.")
+        )
+      : React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflowX:"auto"}},
+          React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:900}},
+            React.createElement("thead",null,
+              React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+                React.createElement("th",{style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},"Source"),
+                STATS_MONTHS_FR.map(function(m){return React.createElement("th",{key:m,style:{padding:"8px 10px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)",whiteSpace:"nowrap"}},m.slice(0,3)+".");}),
+                React.createElement("th",{style:{padding:"8px 14px",textAlign:"center",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},"Total")
+              )
+            ),
+            React.createElement("tbody",null,
+              (function(){
+                var grandTotal={};STATS_MONTHS.forEach(function(m){grandTotal[m]=0;});
+                var fixedRows=STATS_SOURCES.map(function(src,si){
+                  var row=stats.find(function(r){return r.source===src;})||{};
+                  var total=STATS_MONTHS.reduce(function(s,m){return s+(row[m]||0);},0);
+                  return React.createElement("tr",{key:src,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:si%2===0?"transparent":"var(--color-background-secondary)"}},
+                    React.createElement("td",{style:{padding:"9px 14px",fontWeight:500,fontSize:13}},src),
+                    STATS_MONTHS.map(function(m){var v=row[m]||0;return React.createElement("td",{key:m,style:{padding:"9px 10px",textAlign:"center",color:v>0?net.color:"var(--color-text-tertiary)",fontWeight:v>0?500:400}},v>0?v:"—");}),
+                    React.createElement("td",{style:{padding:"9px 14px",textAlign:"center",fontWeight:700,color:total>0?net.color:"var(--color-text-tertiary)"}},total>0?total:"—")
+                  );
+                });
+                var gt=STATS_MONTHS.reduce(function(s,m){return s+(grandTotal[m]||0);},0);
+                var totalRow=React.createElement("tr",{style:{background:net.light,borderTop:"2px solid "+net.color}},
+                  React.createElement("td",{style:{padding:"10px 14px",fontWeight:700,color:net.color}},"TOTAL"),
+                  STATS_MONTHS.map(function(m){var v=grandTotal[m]||0;return React.createElement("td",{key:m,style:{padding:"10px 10px",textAlign:"center",fontWeight:700,color:net.color}},v>0?v:"—");}),
+                  React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:700,color:net.color}},gt>0?gt:"—")
+                );
+                return fixedRows.concat([totalRow]);
+              })()
+            )
+          )
+        )
+  );
+}
+
 function CARow(props){
   var comm=props.comm,color=props.color,initialValue=props.initialValue;
   var [val,setVal]=useState(initialValue||"");
@@ -637,9 +848,10 @@ function CompanyView(props){
       React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){exportCSV(myLeads,company.name);},style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"⬇ Exporter CSV"),React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion"))
     ),
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"0 20px",display:"flex"}},
-      [["leads","📋 Mes leads"],["ca","💶 CA Facturé"]].map(function(item){var active=activeTab===item[0];return React.createElement("button",{key:item[0],onClick:function(){setActiveTab(item[0]);},style:{padding:"12px 20px",border:"none",borderBottom:"2px solid "+(active?net.color:"transparent"),background:"transparent",color:active?net.color:"var(--color-text-secondary)",fontWeight:active?500:400,fontSize:13,cursor:"pointer"}},item[1]);})
+      [["leads","📋 Mes leads"],["ca","💶 CA Facturé"],["stats","📊 Mes Stats"]].map(function(item){var active=activeTab===item[0];return React.createElement("button",{key:item[0],onClick:function(){setActiveTab(item[0]);},style:{padding:"12px 20px",border:"none",borderBottom:"2px solid "+(active?net.color:"transparent"),background:"transparent",color:active?net.color:"var(--color-text-secondary)",fontWeight:active?500:400,fontSize:13,cursor:"pointer"}},item[1]);})
     ),
     React.createElement("div",{style:{display:activeTab==="ca"?"block":"none"}},React.createElement(CAView,{company:company,companies:companies})),
+    React.createElement("div",{style:{display:activeTab==="stats"?"block":"none"}},React.createElement(LeadsStatsView,{company:company,net:net})),
     activeTab==="leads"&&React.createElement("div",{style:{padding:16}},
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
         React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
@@ -745,7 +957,7 @@ function AdminView(props){
   var grouped=useMemo(function(){var r={};companies.forEach(function(c){r[c.id]=leads.filter(function(l){return l.companyId===c.id;});});return r;},[leads,companies]);
   var importGroups=useMemo(function(){var g={};leads.forEach(function(l){if(!l.importId)return;if(!g[l.importId])g[l.importId]={id:l.importId,label:l.importLabel,companyId:l.companyId,leads:[]};g[l.importId].leads.push(l);});return Object.values(g).sort(function(a,b){return b.id.localeCompare(a.id);});},[leads]);
   var allStats=useMemo(function(){return{total:leads.length,byStatus:STATUSES.map(function(s){return Object.assign({},s,{count:leads.filter(function(l){return l.status===s.key;}).length});})};},[leads]);
-  var tabs=[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["ca","💶 CA Facturé"],["connexions","Connexions"],["companies","Sociétés"]];
+  var tabs=[["import","Importer CSV"],["imports","Historique imports"],["overview","Vue d'ensemble"],["ca","💶 CA Facturé"],["stats","📊 Stats Leads"],["connexions","Connexions"],["companies","Sociétés"]];
   return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",{style:{fontWeight:500,fontSize:15}},"🛠 Administration · Plateforme Leads"),
@@ -798,6 +1010,8 @@ function AdminView(props){
       ),
 
       tab==="ca"&&React.createElement(CAAdminView,{key:"ca-admin-"+caRefreshKey,companies:companies,onRefresh:function(){setCaRefreshKey(function(k){return k+1;});}}),
+
+      tab==="stats"&&React.createElement(LeadsStatsAdminView,{companies:companies}),
 
       tab==="connexions"&&React.createElement("div",null,
         React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},loginHistory.length+" connexion(s)"),
