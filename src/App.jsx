@@ -526,8 +526,10 @@ function CAView(props){
   var [moisSel,setMoisSel]=useState(function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   var [newNom,setNewNom]=useState("");
   var [newRole,setNewRole]=useState("commercial");
-  var moisList=getMoisList(6);
+  var [moisDebut,setMoisDebut]=useState(function(){var d=new Date();d.setMonth(d.getMonth()-5);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
+  var [moisFin,setMoisFin]=useState(function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   var moisListAll=getMoisListSince(2024,1);
+  var moisList=useMemo(function(){return moisListAll.filter(function(m){return m>=moisDebut&&m<=moisFin;});},[moisListAll,moisDebut,moisFin]);
 
   useEffect(function(){
     var cancelled=false;
@@ -597,6 +599,12 @@ function CAView(props){
           html+='</tbody><tfoot><tr class="total-row"><td colspan="2">TOTAL RÉSEAU</td>'+moisList.map(function(m){return'<td>'+fmtCA(globalCA[m]||0)+'</td>';}).join("")+'<td>'+fmtCA(Object.values(globalCA).reduce(function(s,v){return s+v;},0))+'</td></tr></tfoot></table></body></html>';
           var w=window.open("","_blank","width=900,height=650");w.document.write(html);w.document.close();w.focus();setTimeout(function(){w.print();},400);
         },style:{padding:"6px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500,whiteSpace:"nowrap"}},"📄 Exporter palmarès PDF")
+      ),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap"}},
+        React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"De :"),
+        React.createElement("select",{value:moisDebut,onChange:function(e){setMoisDebut(e.target.value);},style:Object.assign({},inp,{padding:"5px 8px",textTransform:"capitalize",fontSize:12})},moisListAll.map(function(m){return React.createElement("option",{key:m,value:m},fmtMois(m));})),
+        React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"À :"),
+        React.createElement("select",{value:moisFin,onChange:function(e){setMoisFin(e.target.value);},style:Object.assign({},inp,{padding:"5px 8px",textTransform:"capitalize",fontSize:12})},moisListAll.map(function(m){return React.createElement("option",{key:m,value:m},fmtMois(m));}))
       ),
       React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}},
         moisList.map(function(m){var total=globalCA[m]||0;var isCurrent=m===moisSel;return React.createElement("div",{key:m,style:{flex:1,minWidth:120,background:isCurrent?net.light:"var(--color-background-secondary)",borderRadius:8,padding:"12px 14px",border:"1px solid "+(isCurrent?net.color:"var(--color-border-tertiary)")}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:4,textTransform:"capitalize"}},fmtMois(m)),React.createElement("div",{style:{fontSize:18,fontWeight:500,color:isCurrent?net.color:"var(--color-text-primary)"}},fmtCA(total)));})
