@@ -762,21 +762,42 @@ function LoginScreen(props){
   var onLogin=props.onLogin,companies=props.companies,mh76Commerciaux=props.mh76Commerciaux||[],mh30Commerciaux=props.mh30Commerciaux||[],atm52Commerciaux=props.atm52Commerciaux||[];
   var [login,setLogin]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState(""),[checking,setChecking]=useState(false);
   async function submit(){
-    if(login===ADMIN.login&&pass===ADMIN.password){onLogin({role:"admin"});return;}
-    if(login===MH76_ADMIN.login&&pass===MH76_ADMIN.password){onLogin({role:"mh76admin",companyId:"c19"});return;}
-    if(login===MH30_ADMIN.login&&pass===MH30_ADMIN.password){onLogin({role:"mh30admin",companyId:"c14"});return;}
-    if(login===ATM52_ADMIN.login&&pass===ATM52_ADMIN.password){onLogin({role:"atm52admin",companyId:"c5"});return;}
+    if(login===ADMIN.login&&pass===ADMIN.password){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"admin",company_name:"Administration",role:"admin",user_name:"Admin"}).catch(function(){});
+      onLogin({role:"admin"});return;
+    }
+    if(login===MH76_ADMIN.login&&pass===MH76_ADMIN.password){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c19",company_name:"76 MH",role:"subadmin",user_name:"Admin 76 MH"}).catch(function(){});
+      onLogin({role:"mh76admin",companyId:"c19"});return;
+    }
+    if(login===MH30_ADMIN.login&&pass===MH30_ADMIN.password){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c14",company_name:"30 MH",role:"subadmin",user_name:"Admin 30 MH"}).catch(function(){});
+      onLogin({role:"mh30admin",companyId:"c14"});return;
+    }
+    if(login===ATM52_ADMIN.login&&pass===ATM52_ADMIN.password){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c5",company_name:"52 ATM",role:"subadmin",user_name:"Admin 52 ATM"}).catch(function(){});
+      onLogin({role:"atm52admin",companyId:"c5"});return;
+    }
     var comm=mh76Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
     if(!comm){setChecking(true);try{var rows=await dbSelect("mh76_commerciaux","login=eq."+encodeURIComponent(login));comm=(rows||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
-    if(comm){onLogin({role:"mh76commercial",commercialId:comm.id});return;}
+    if(comm){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c19",company_name:"76 MH",role:"commercial",user_name:comm.nom}).catch(function(){});
+      onLogin({role:"mh76commercial",commercialId:comm.id});return;
+    }
     var comm30=mh30Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
     if(!comm30){setChecking(true);try{var rows30=await dbSelect("mh30_commerciaux","login=eq."+encodeURIComponent(login));comm30=(rows30||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
-    if(comm30){onLogin({role:"mh30commercial",commercialId:comm30.id});return;}
+    if(comm30){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c14",company_name:"30 MH",role:"commercial",user_name:comm30.nom}).catch(function(){});
+      onLogin({role:"mh30commercial",commercialId:comm30.id});return;
+    }
     var comm52=atm52Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
     if(!comm52){setChecking(true);try{var rows52=await dbSelect("atm52_commerciaux","login=eq."+encodeURIComponent(login));comm52=(rows52||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
-    if(comm52){onLogin({role:"atm52commercial",commercialId:comm52.id});return;}
+    if(comm52){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c5",company_name:"52 ATM",role:"commercial",user_name:comm52.nom}).catch(function(){});
+      onLogin({role:"atm52commercial",commercialId:comm52.id});return;
+    }
     var co=companies.find(function(c){return c.login===login&&c.password===pass;});
-    if(co){dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name}).catch(function(){});onLogin({role:"company",companyId:co.id});return;}
+    if(co){dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name,role:"company",user_name:co.name}).catch(function(){});onLogin({role:"company",companyId:co.id});return;}
     setErr("Identifiants incorrects.");
   }
   return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--color-background-tertiary)"}},
@@ -1067,9 +1088,32 @@ function AdminView(props){
         loginHistory.length===0&&React.createElement("div",{style:{padding:24,textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)"}},"Aucune connexion."),
         loginHistory.length>0&&React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",overflow:"hidden"}},
           React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
-            React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},["Société","Réseau","Date et heure"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);}))),
-            React.createElement("tbody",null,loginHistory.map(function(h,i){var co=companies.find(function(c){return c.id===h.company_id;}),net=co?NETWORKS[co.network]:NETWORKS.renovation,d=new Date(h.login_at);return React.createElement("tr",{key:h.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},React.createElement("td",{style:{padding:"9px 14px",fontWeight:500}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),h.company_name||"—")),React.createElement("td",{style:{padding:"9px 14px"}},React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label)),React.createElement("td",{style:{padding:"9px 14px",fontSize:13,color:"var(--color-text-secondary)"}},d.toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})));})
-            )
+            React.createElement("thead",null,React.createElement("tr",{style:{background:"var(--color-background-secondary)",fontSize:11,color:"var(--color-text-secondary)"}},
+              ["Société","Utilisateur","Rôle","Date et heure"].map(function(h){return React.createElement("th",{key:h,style:{padding:"8px 14px",textAlign:"left",fontWeight:500,borderBottom:"1px solid var(--color-border-tertiary)"}},h);})
+            )),
+            React.createElement("tbody",null,loginHistory.map(function(h,i){
+              var co=companies.find(function(c){return c.id===h.company_id;})||{name:h.company_name||"—",network:"renovation"};
+              var net=NETWORKS[co.network]||NETWORKS.renovation;
+              var d=new Date(h.login_at);
+              var roleLabel=h.role==="admin"?"🔧 Admin":h.role==="subadmin"?"⚙️ Admin local":h.role==="commercial"?"👤 Commercial":"🏢 Société";
+              var roleBg=h.role==="admin"?"#F3E8FF":h.role==="subadmin"?"#E8F0FE":h.role==="commercial"?"#E1F5EE":"var(--color-background-secondary)";
+              var roleColor=h.role==="admin"?"#6B21A8":h.role==="subadmin"?"#1A73E8":h.role==="commercial"?"#0F6E56":"var(--color-text-secondary)";
+              return React.createElement("tr",{key:h.id,style:{borderBottom:"1px solid var(--color-border-tertiary)",background:i%2===0?"transparent":"var(--color-background-secondary)"}},
+                React.createElement("td",{style:{padding:"9px 14px",fontWeight:500}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                    React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),
+                    h.company_name||co.name||"—"
+                  )
+                ),
+                React.createElement("td",{style:{padding:"9px 14px",fontWeight:500}},h.user_name||"—"),
+                React.createElement("td",{style:{padding:"9px 14px"}},
+                  React.createElement("span",{style:{fontSize:11,background:roleBg,color:roleColor,padding:"2px 8px",borderRadius:9,fontWeight:500}},roleLabel)
+                ),
+                React.createElement("td",{style:{padding:"9px 14px",fontSize:13,color:"var(--color-text-secondary)"}},
+                  d.toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+" à "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})
+                )
+              );
+            }))
           )
         )
       ),
