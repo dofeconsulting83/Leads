@@ -77,7 +77,7 @@ var INIT_COMPANIES = [
   { id:"c17", name:"59 MH",   network:"humidite",   login:"mh59",   password:"1234", email:"prospect@murhumide.fr" },
   { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   password:"1234", email:"" },
   { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"mh76_societe", email:"normandie@murhumide.fr" },
-  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"cyril.blin@murhumide.fr" },
+  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"jmpochiero83@murhumide.fr" },
   { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" }
 ];
 var ADMIN = { login: "admin", password: "admin123" };
