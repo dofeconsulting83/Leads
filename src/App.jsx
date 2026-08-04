@@ -77,13 +77,14 @@ var INIT_COMPANIES = [
   { id:"c17", name:"59 MH",   network:"humidite",   login:"mh59",   password:"1234", email:"prospect@murhumide.fr" },
   { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   password:"1234", email:"" },
   { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"mh76_societe", email:"normandie@murhumide.fr" },
-  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"1234", email:"cyril.blin@murhumide.fr" },
+  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"cyril.blin@murhumide.fr" },
   { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" }
 ];
 var ADMIN = { login: "admin", password: "admin123" };
 var MH76_ADMIN = { companyId: "c19", login: "mh76", password: "1234" };
 var MH30_ADMIN = { companyId: "c14", login: "mh30", password: "1234" };
 var ATM52_ADMIN = { companyId: "c5",  login: "atm52", password: "1234" };
+var MH83_ADMIN = { companyId: "c20", login: "mh83", password: "1234" };
 var PAGE_SIZE = 20;
 
 function rowToLead(r) { return { id:r.id, companyId:r.company_id, firstName:r.first_name, lastName:r.last_name, email:r.email, phone:r.phone, address:r.address, city:r.city, zip:r.zip, message:r.message, campaign:r.campaign, importedAt:r.imported_at, importId:r.import_id||null, importLabel:r.import_label||null, status:r.status||"nouveau", note:r.note||"", source:r.source||"" }; }
@@ -759,7 +760,7 @@ function CAAdminView(props){
 }
 
 function LoginScreen(props){
-  var onLogin=props.onLogin,companies=props.companies,mh76Commerciaux=props.mh76Commerciaux||[],mh30Commerciaux=props.mh30Commerciaux||[],atm52Commerciaux=props.atm52Commerciaux||[];
+  var onLogin=props.onLogin,companies=props.companies,mh76Commerciaux=props.mh76Commerciaux||[],mh30Commerciaux=props.mh30Commerciaux||[],mh83Commerciaux=props.mh83Commerciaux||[],atm52Commerciaux=props.atm52Commerciaux||[];
   var [login,setLogin]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState(""),[checking,setChecking]=useState(false);
   async function submit(){
     if(login===ADMIN.login&&pass===ADMIN.password){
@@ -778,6 +779,10 @@ function LoginScreen(props){
       dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c5",company_name:"52 ATM",role:"subadmin",user_name:"Admin 52 ATM"}).catch(function(){});
       onLogin({role:"atm52admin",companyId:"c5"});return;
     }
+    if(login===MH83_ADMIN.login&&pass===MH83_ADMIN.password){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c20",company_name:"83 MH",role:"subadmin",user_name:"Admin 83 MH"}).catch(function(){});
+      onLogin({role:"mh83admin",companyId:"c20"});return;
+    }
     var comm=mh76Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
     if(!comm){setChecking(true);try{var rows=await dbSelect("mh76_commerciaux","login=eq."+encodeURIComponent(login));comm=(rows||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
     if(comm){
@@ -795,6 +800,12 @@ function LoginScreen(props){
     if(comm52){
       dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c5",company_name:"52 ATM",role:"commercial",user_name:comm52.nom}).catch(function(){});
       onLogin({role:"atm52commercial",commercialId:comm52.id});return;
+    }
+    var comm83=mh83Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
+    if(!comm83){setChecking(true);try{var rows83=await dbSelect("mh83_commerciaux","login=eq."+encodeURIComponent(login));comm83=(rows83||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
+    if(comm83){
+      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c20",company_name:"83 MH",role:"commercial",user_name:comm83.nom}).catch(function(){});
+      onLogin({role:"mh83commercial",commercialId:comm83.id});return;
     }
     var co=companies.find(function(c){return c.login===login&&c.password===pass;});
     if(co){dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name,role:"company",user_name:co.name}).catch(function(){});onLogin({role:"company",companyId:co.id});return;}
@@ -1280,6 +1291,7 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
 
 var MH76AdminView=makeSubAdminView("c19","76 MH","humidite","mh76_commerciaux","mh76_commerciaux");
 var MH30AdminView=makeSubAdminView("c14","30 MH","humidite","mh30_commerciaux","mh30_commerciaux");
+var MH83AdminView=makeSubAdminView("c20","83 MH","humidite","mh83_commerciaux","mh83_commerciaux");
 var ATM52AdminView=makeSubAdminView("c5","52 ATM","renovation","atm52_commerciaux","atm52_commerciaux");
 
 function makeSubCommercialView(companyId,companyName,network,dbTable){
@@ -1321,6 +1333,7 @@ function makeSubCommercialView(companyId,companyName,network,dbTable){
 
 var MH76CommercialView=makeSubCommercialView("c19","76 MH","humidite","mh76_commerciaux");
 var MH30CommercialView=makeSubCommercialView("c14","30 MH","humidite","mh30_commerciaux");
+var MH83CommercialView=makeSubCommercialView("c20","83 MH","humidite","mh83_commerciaux");
 var ATM52CommercialView=makeSubCommercialView("c5","52 ATM","renovation","atm52_commerciaux");
 
 export default function App(){
@@ -1329,6 +1342,7 @@ export default function App(){
   var [companies,setCompanies]=useState(INIT_COMPANIES);
   var [mh76Commerciaux,setMh76Commerciaux]=useState([]);
   var [mh30Commerciaux,setMh30Commerciaux]=useState([]);
+  var [mh83Commerciaux,setMh83Commerciaux]=useState([]);
   var [atm52Commerciaux,setAtm52Commerciaux]=useState([]);
   var [loading,setLoading]=useState(true);
   var [dbError,setDbError]=useState(null);
@@ -1345,6 +1359,7 @@ export default function App(){
         else{await dbUpsert("companies",INIT_COMPANIES.map(companyToRow));setCompanies(INIT_COMPANIES);}
         var comms=await dbSelect("mh76_commerciaux","order=created_at.asc");if(Array.isArray(comms))setMh76Commerciaux(comms);
         var comms30=await dbSelect("mh30_commerciaux","order=created_at.asc");if(Array.isArray(comms30))setMh30Commerciaux(comms30);
+        var comms83=await dbSelect("mh83_commerciaux","order=created_at.asc");if(Array.isArray(comms83))setMh83Commerciaux(comms83);
         var comms52=await dbSelect("atm52_commerciaux","order=created_at.asc");if(Array.isArray(comms52))setAtm52Commerciaux(comms52);
       }catch(e){setDbError(e&&e.message?e.message:"Erreur réseau");}
       setLoading(false);
@@ -1353,15 +1368,17 @@ export default function App(){
   },[]);
   if(loading)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--color-background-tertiary)",flexDirection:"column",gap:12}},React.createElement("div",{style:{fontSize:28}},"⏳"),React.createElement("div",{style:{fontWeight:500}},"Connexion à la base de données…"),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Supabase · okbtkvjexxhjmbdmorgg"));
   if(dbError)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--color-background-tertiary)",flexDirection:"column",gap:12,padding:24}},React.createElement("div",{style:{fontSize:28}},"⚠️"),React.createElement("div",{style:{fontWeight:500,color:"#A32D2D"}},"Erreur de connexion Supabase"),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)"}},dbError));
-  if(!session)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});
+  if(!session)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,mh83Commerciaux:mh83Commerciaux,atm52Commerciaux:atm52Commerciaux});
   if(session.role==="admin")return React.createElement(AdminView,{leads:leads,setLeads:setLeads,companies:companies,setCompanies:setCompanies,onLogout:handleLogout});
   if(session.role==="mh76admin")return React.createElement(MH76AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
   if(session.role==="mh30admin")return React.createElement(MH30AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
+  if(session.role==="mh83admin")return React.createElement(MH83AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
   if(session.role==="atm52admin")return React.createElement(ATM52AdminView,{leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
-  if(session.role==="mh76commercial"){var comm=mh76Commerciaux.find(function(c){return c.id===session.commercialId;});if(!comm)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});return React.createElement(MH76CommercialView,{commercial:comm,leads:leads,setLeads:setLeads,onLogout:handleLogout});}
-  if(session.role==="mh30commercial"){var comm30=mh30Commerciaux.find(function(c){return c.id===session.commercialId;});if(!comm30)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});return React.createElement(MH30CommercialView,{commercial:comm30,leads:leads,setLeads:setLeads,onLogout:handleLogout});}
-  if(session.role==="atm52commercial"){var comm52=atm52Commerciaux.find(function(c){return c.id===session.commercialId;});if(!comm52)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});return React.createElement(ATM52CommercialView,{commercial:comm52,leads:leads,setLeads:setLeads,onLogout:handleLogout});}
+  if(session.role==="mh76commercial"){var comm=mh76Commerciaux.find(function(c){return c.id===session.commercialId;});if(!comm)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,mh83Commerciaux:mh83Commerciaux,atm52Commerciaux:atm52Commerciaux});return React.createElement(MH76CommercialView,{commercial:comm,leads:leads,setLeads:setLeads,onLogout:handleLogout});}
+  if(session.role==="mh30commercial"){var comm30=mh30Commerciaux.find(function(c){return c.id===session.commercialId;});if(!comm30)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,mh83Commerciaux:mh83Commerciaux,atm52Commerciaux:atm52Commerciaux});return React.createElement(MH30CommercialView,{commercial:comm30,leads:leads,setLeads:setLeads,onLogout:handleLogout});}
+  if(session.role==="mh83commercial"){var comm83=mh83Commerciaux.find(function(c){return c.id===session.commercialId;});if(!comm83)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,mh83Commerciaux:mh83Commerciaux,atm52Commerciaux:atm52Commerciaux});return React.createElement(MH83CommercialView,{commercial:comm83,leads:leads,setLeads:setLeads,onLogout:handleLogout});}
+  if(session.role==="atm52commercial"){var comm52=atm52Commerciaux.find(function(c){return c.id===session.commercialId;});if(!comm52)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,mh83Commerciaux:mh83Commerciaux,atm52Commerciaux:atm52Commerciaux});return React.createElement(ATM52CommercialView,{commercial:comm52,leads:leads,setLeads:setLeads,onLogout:handleLogout});}
   var company=companies.find(function(c){return c.id===session.companyId;});
-  if(!company)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,atm52Commerciaux:atm52Commerciaux});
+  if(!company)return React.createElement(LoginScreen,{onLogin:handleLogin,companies:companies,mh76Commerciaux:mh76Commerciaux,mh30Commerciaux:mh30Commerciaux,mh83Commerciaux:mh83Commerciaux,atm52Commerciaux:atm52Commerciaux});
   return React.createElement(CompanyView,{company:company,leads:leads,setLeads:setLeads,companies:companies,onLogout:handleLogout});
 }
