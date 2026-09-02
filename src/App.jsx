@@ -77,7 +77,7 @@ var INIT_COMPANIES = [
   { id:"c17", name:"59 MH",   network:"humidite",   login:"mh59",   password:"1234", email:"prospect@murhumide.fr" },
   { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   password:"1234", email:"" },
   { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"mh76_societe", email:"normandie@murhumide.fr" },
-  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"jmpochiero83@murhumide.fr" },
+  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"cyril.blin@murhumide.fr" },
   { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" }
 ];
 var ADMIN = { login: "admin", password: "admin123" };
@@ -490,6 +490,45 @@ function LeadsStatsView(props){
 }
 
 
+var GSHEET_ID="1HdDhcTlUtw5LK_k69mPB8hdeFU4-kOhy6Fl_4QZAumg";
+var GSHEET_API_KEY="AIzaSyBHhvGkHOiPQLAOK2n-5xCZwCGShS67il8";
+// Mapping onglet Google Sheet → company_id
+// À compléter avec les vrais noms d'onglets
+var GSHEET_TAB_MAP={
+  "52 ATM":"c5",
+  "14 ATM":"c3",
+  "30 MH":"c14",
+  "60 ATM":"c7",
+  "83 MH":"c20",
+  "94 ATM":"c12"
+};
+
+async function fetchGSheetTab(tabName){
+  var url="https://sheets.googleapis.com/v4/spreadsheets/"+GSHEET_ID
+    +"/values/"+encodeURIComponent(tabName)
+    +"?key="+GSHEET_API_KEY;
+  var r=await fetch(url);
+  if(!r.ok)throw new Error("Erreur lecture onglet '"+tabName+"' : "+await r.text());
+  var data=await r.json();
+  return data.values||[];
+}
+
+function parseGSheetRows(rows){
+  if(rows.length<2)return[];
+  var headers=rows[0].map(function(h){return(h||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g," ").trim();});
+  function idx(){var keys=Array.prototype.slice.call(arguments);return headers.findIndex(function(h){return keys.some(function(k){return h.includes(k);});});}
+  var iFullName=idx("nom complet","full name","nom"),iFirst=idx("prenom","first name"),iLast=idx("last name","lastname");
+  var iPhone=idx("telephone","phone","mobile","numero"),iEmail=idx("email","mail");
+  var iZip=idx("code postal","postal","zip","cp"),iCity=idx("ville","city");
+  var iDate=idx("date","heure","soumis","created"),iCampaign=idx("campagne","campaign","ad name","publicite");
+  return rows.slice(1).map(function(row,i){
+    function g(j){return(j>=0&&j<row.length)?(row[j]||"").trim():"";}
+    var fn=g(iFirst)||"",ln=g(iLast)||"";
+    if(!fn&&!ln&&iFullName>=0){var pts=g(iFullName).split(/\s+/);fn=pts[0]||"";ln=pts.slice(1).join(" ")||"";}
+    if(!fn&&!g(iPhone)&&!g(iEmail))return null;
+    return{id:"l_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6),firstName:fn||"—",lastName:ln,email:g(iEmail),phone:g(iPhone),address:"",city:g(iCity),zip:g(iZip),message:"",campaign:g(iCampaign),importedAt:g(iDate)||new Date().toLocaleString("fr-FR"),status:"nouveau",note:"",source:"Facebook",companyId:null,importId:null,importLabel:null};
+  }).filter(Boolean);
+}
 function CARow(props){
   var comm=props.comm,color=props.color,initialValue=props.initialValue;
   var [val,setVal]=useState(initialValue||"");
@@ -953,6 +992,58 @@ function CompanyView(props){
   );
 }
 
+function GSheetSyncPanel(props){
+  var leads=props.leads,setLeads=props.setLeads,companies=props.companies,grouped=props.grouped,setMsg=props.setMsg;
+  var [syncing,setSyncing]=useState(false);
+  var [progress,setProgress]=useState(null);
+  var [selTabs,setSelTabs]=useState(Object.keys(GSHEET_TAB_MAP));
+
+  async function syncAll(){
+    setSyncing(true);setProgress("Connexion au Google Sheet…");
+    var totalNew=0,errors=[];
+    for(var i=0;i<selTabs.length;i++){
+      var tabName=selTabs[i];
+      var coId=GSHEET_TAB_MAP[tabName];
+      var co=companies.find(function(c){return c.id===coId;});
+      if(!co)continue;
+      setProgress("Lecture onglet '"+tabName+"'… ("+(i+1)+"/"+selTabs.length+")");
+      try{
+        var rows=await fetchGSheetTab(tabName);
+        var parsed=parseGSheetRows(rows);
+        if(!parsed.length)continue;
+        var existing=leads.filter(function(l){return l.companyId===coId;}),existingKeys={};
+        existing.forEach(function(l){if(l.phone)existingKeys[l.phone.replace(/\s/g,"")]=true;if(l.email)existingKeys[l.email.toLowerCase().trim()]=true;});
+        var newLeads=parsed.filter(function(l){var phone=(l.phone||"").replace(/\s/g,""),email=(l.email||"").toLowerCase().trim();if(phone&&existingKeys[phone])return false;if(email&&existingKeys[email])return false;return true;});
+        if(!newLeads.length)continue;
+        var importId="imp_gs_"+Date.now()+"_"+coId;
+        var importLabel=co.name+" — Google Sheets Facebook — "+new Date().toLocaleString("fr-FR");
+        var withCo=newLeads.map(function(l){return Object.assign({},l,{companyId:coId,importId:importId,importLabel:importLabel,source:"Facebook"});});
+        await dbInsert("leads",withCo.map(leadToRow));
+        setLeads(function(prev){return withCo.concat(prev);});
+        totalNew+=newLeads.length;
+        if(co.email){fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:newLeads.length})}).catch(function(){});}
+      }catch(e){errors.push(tabName+" : "+e.message);}
+    }
+    setSyncing(false);setProgress(null);
+    if(errors.length){setMsg({type:"error",text:"Erreurs : "+errors.join(" | ")});}
+    else{setMsg({type:"ok",text:"✓ "+totalNew+" nouveau"+(totalNew>1?"x":"")+" lead"+(totalNew>1?"s":"")+" importé"+(totalNew>1?"s":"")+" depuis Google Sheets (Facebook)"+(totalNew===0?" — aucun nouveau lead trouvé":"")+"."});}
+  }
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:10}},"Sélectionnez les onglets à synchroniser :"),
+    React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap",marginBottom:14}},
+      Object.keys(GSHEET_TAB_MAP).map(function(tab){
+        var active=selTabs.indexOf(tab)>=0;
+        var co=companies.find(function(c){return c.id===GSHEET_TAB_MAP[tab];});
+        var nk=co?co.network:"renovation";
+        return React.createElement("button",{key:tab,onClick:function(){setSelTabs(function(prev){return active?prev.filter(function(t){return t!==tab;}):prev.concat(tab);});},style:{padding:"4px 10px",borderRadius:7,border:"1px solid "+(active?NETWORKS[nk].color:"var(--color-border-secondary)"),background:active?NETWORKS[nk].light:"transparent",color:active?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},tab);
+      })
+    ),
+    progress&&React.createElement("div",{style:{fontSize:12,color:"#1877F2",marginBottom:10,padding:"8px 12px",background:"#E7F0FF",borderRadius:8}},progress),
+    React.createElement("button",{onClick:syncAll,disabled:syncing||selTabs.length===0,style:{padding:"9px 20px",borderRadius:8,border:"none",background:syncing?"#888":"#1877F2",color:"#fff",fontWeight:500,fontSize:14,cursor:syncing?"not-allowed":"pointer",opacity:syncing?0.7:1}},syncing?"Synchronisation…":"🔄 Synchroniser maintenant")
+  );
+}
+
 function OverviewMonthlyTable(props){
   var leads=props.leads,companies=props.companies,grouped=props.grouped;
   var months=getMoisList(6);
@@ -1046,26 +1137,37 @@ function AdminView(props){
       ),
       msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},msg.text,React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")),
 
-      tab==="import"&&React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20}},
-        React.createElement("div",{style:{fontWeight:500,marginBottom:14}},"Importer un fichier CSV"),
-        React.createElement("div",{style:{marginBottom:14}},
-          React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Société destinataire"),
-          ["renovation","humidite"].map(function(nk){return React.createElement("div",{key:nk,style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:NETWORKS[nk].color,fontWeight:500,marginBottom:4}},NETWORKS[nk].label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},companies.filter(function(c){return c.network===nk;}).slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});}).map(function(c){return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"5px 11px",borderRadius:7,border:"1px solid "+(selId===c.id?NETWORKS[nk].color:"var(--color-border-secondary)"),background:selId===c.id?NETWORKS[nk].light:"transparent",color:selId===c.id?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:selId===c.id?500:400}},c.name);})));})
+      tab==="import"&&React.createElement("div",null,
+        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:16}},
+          React.createElement("div",{style:{fontWeight:500,marginBottom:14}},"Importer un fichier CSV"),
+          React.createElement("div",{style:{marginBottom:14}},
+            React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Société destinataire"),
+            ["renovation","humidite"].map(function(nk){return React.createElement("div",{key:nk,style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:NETWORKS[nk].color,fontWeight:500,marginBottom:4}},NETWORKS[nk].label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},companies.filter(function(c){return c.network===nk;}).slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});}).map(function(c){return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"5px 11px",borderRadius:7,border:"1px solid "+(selId===c.id?NETWORKS[nk].color:"var(--color-border-secondary)"),background:selId===c.id?NETWORKS[nk].light:"transparent",color:selId===c.id?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:selId===c.id?500:400}},c.name);})));})
+          ),
+          selCo&&React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12}},"Société : ",React.createElement("b",{style:{color:NETWORKS[selCo.network].color}},selCo.name)," · "+(grouped[selCo.id]||[]).length+" lead(s) en base"),
+          React.createElement("div",{style:{marginBottom:14}},
+            React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Origine (auto-détection si non sélectionnée)"),
+            React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+              ["","Google Ads","Facebook","Contacts"].map(function(s){
+                var active=sourceOverride===s;
+                var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8"},"Facebook":{bg:"#E7F0FF",color:"#1877F2"},"Contacts":{bg:"#F3F4F6",color:"#555"},"":{}};
+                var c=cfg[s]||{};
+                return React.createElement("button",{key:s,onClick:function(){setSourceOverride(s);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(active?(c.color||"#185FA5"):"var(--color-border-secondary)"),background:active?(c.bg||"#E6F1FB"):"transparent",color:active?(c.color||"#185FA5"):"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},s||"Auto-détection");
+              })
+            )
+          ),
+          React.createElement("input",{type:"file",accept:".csv",ref:fileRef,onChange:handleFile,style:{display:"none"}}),
+          React.createElement("button",{onClick:function(){if(selId&&!uploading)fileRef.current.click();},style:{padding:"9px 20px",borderRadius:8,border:"none",background:selCo?NETWORKS[selCo.network].color:"#888",color:"#fff",fontWeight:500,fontSize:14,cursor:selCo&&!uploading?"pointer":"not-allowed",opacity:uploading?0.7:1}},uploading?"Import en cours…":"⬆ Choisir le fichier CSV")
         ),
-        selCo&&React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12}},"Société : ",React.createElement("b",{style:{color:NETWORKS[selCo.network].color}},selCo.name)," · "+(grouped[selCo.id]||[]).length+" lead(s) en base"),
-        React.createElement("div",{style:{marginBottom:14}},
-          React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Origine (auto-détection si non sélectionnée)"),
-          React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-            ["","Google Ads","Facebook","Contacts"].map(function(s){
-              var active=sourceOverride===s;
-              var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8"},"Facebook":{bg:"#E7F0FF",color:"#1877F2"},"Contacts":{bg:"#F3F4F6",color:"#555"},"":{}};
-              var c=cfg[s]||{};
-              return React.createElement("button",{key:s,onClick:function(){setSourceOverride(s);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(active?(c.color||"#185FA5"):"var(--color-border-secondary)"),background:active?(c.bg||"#E6F1FB"):"transparent",color:active?(c.color||"#185FA5"):"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},s||"Auto-détection");
-            })
-          )
-        ),
-        React.createElement("input",{type:"file",accept:".csv",ref:fileRef,onChange:handleFile,style:{display:"none"}}),
-        React.createElement("button",{onClick:function(){if(selId&&!uploading)fileRef.current.click();},style:{padding:"9px 20px",borderRadius:8,border:"none",background:selCo?NETWORKS[selCo.network].color:"#888",color:"#fff",fontWeight:500,fontSize:14,cursor:selCo&&!uploading?"pointer":"not-allowed",opacity:uploading?0.7:1}},uploading?"Import en cours…":"⬆ Choisir le fichier CSV")
+
+        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:6}},
+            React.createElement("div",{style:{fontWeight:500}},"🔄 Synchroniser depuis Google Sheets"),
+            React.createElement("span",{style:{fontSize:11,background:"#E7F0FF",color:"#1877F2",padding:"2px 8px",borderRadius:8,fontWeight:500}},"Facebook")
+          ),
+          React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:14}},"Importe automatiquement les nouveaux leads Facebook depuis le Google Sheet partagé. Les doublons sont ignorés."),
+          React.createElement(GSheetSyncPanel,{leads:leads,setLeads:setLeads,companies:companies,grouped:grouped,setMsg:setMsg})
+        )
       ),
 
       tab==="imports"&&React.createElement("div",null,
