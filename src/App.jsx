@@ -78,7 +78,8 @@ var INIT_COMPANIES = [
   { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   password:"1234", email:"" },
   { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"mh76_societe", email:"normandie@murhumide.fr" },
   { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"cyril.blin@murhumide.fr" },
-  { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" }
+  { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" },
+  { id:"c22", name:"ATM BFC", network:"renovation", login:"atmbfc", password:"1234", email:"" },
 ];
 var ADMIN = { login: "admin", password: "admin123" };
 var MH76_ADMIN = { companyId: "c19", login: "mh76", password: "1234" };
