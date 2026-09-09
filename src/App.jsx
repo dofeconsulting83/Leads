@@ -491,6 +491,17 @@ function LeadsStatsView(props){
 }
 
 
+var COMMERCIAL_NOTIFY={
+  "c14":{email:"30mh@murhumide.fr",name:"30 MH"},
+  "c19":{email:"normandie@murhumide.fr",name:"76 MH"},
+  "c20":{email:"jmpochiero83@murhumide.fr",name:"83 MH"}
+};
+
+function notifyCommercialLogin(companyId,commercialNom){
+  var cfg=COMMERCIAL_NOTIFY[companyId];
+  if(!cfg)return;
+  fetch("/api/notify-commercial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({commercialNom:commercialNom,companyName:cfg.name,companyEmail:cfg.email,loginAt:new Date().toLocaleString("fr-FR")})}).catch(function(){});
+}
 var GSHEET_ID="1HdDhcTlUtw5LK_k69mPB8hdeFU4-kOhy6Fl_4QZAumg";
 var GSHEET_API_KEY="AIzaSyBHhvGkHOiPQLAOK2n-5xCZwCGShS67il8";
 // Mapping onglet Google Sheet → company_id
@@ -827,12 +838,14 @@ function LoginScreen(props){
     if(!comm){setChecking(true);try{var rows=await dbSelect("mh76_commerciaux","login=eq."+encodeURIComponent(login));comm=(rows||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
     if(comm){
       dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c19",company_name:"76 MH",role:"commercial",user_name:comm.nom}).catch(function(){});
+      notifyCommercialLogin("c19",comm.nom);
       onLogin({role:"mh76commercial",commercialId:comm.id});return;
     }
     var comm30=mh30Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
     if(!comm30){setChecking(true);try{var rows30=await dbSelect("mh30_commerciaux","login=eq."+encodeURIComponent(login));comm30=(rows30||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
     if(comm30){
       dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c14",company_name:"30 MH",role:"commercial",user_name:comm30.nom}).catch(function(){});
+      notifyCommercialLogin("c14",comm30.nom);
       onLogin({role:"mh30commercial",commercialId:comm30.id});return;
     }
     var comm52=atm52Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
@@ -845,6 +858,7 @@ function LoginScreen(props){
     if(!comm83){setChecking(true);try{var rows83=await dbSelect("mh83_commerciaux","login=eq."+encodeURIComponent(login));comm83=(rows83||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
     if(comm83){
       dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c20",company_name:"83 MH",role:"commercial",user_name:comm83.nom}).catch(function(){});
+      notifyCommercialLogin("c20",comm83.nom);
       onLogin({role:"mh83commercial",commercialId:comm83.id});return;
     }
     var co=companies.find(function(c){return c.login===login&&c.password===pass;});
