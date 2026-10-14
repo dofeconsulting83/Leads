@@ -529,18 +529,43 @@ async function fetchGSheetTab(tabName){
 
 function parseGSheetRows(rows){
   if(rows.length<2)return[];
-  var headers=rows[0].map(function(h){return(h||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g," ").trim();});
-  function idx(){var keys=Array.prototype.slice.call(arguments);return headers.findIndex(function(h){return keys.some(function(k){return h.includes(k);});});}
-  var iFullName=idx("nom complet","full name","nom"),iFirst=idx("prenom","first name"),iLast=idx("last name","lastname");
-  var iPhone=idx("telephone","phone","mobile","numero"),iEmail=idx("email","mail");
-  var iZip=idx("code postal","postal","zip","cp"),iCity=idx("ville","city");
-  var iDate=idx("date","heure","soumis","created"),iCampaign=idx("campagne","campaign","ad name","publicite");
+  var headers=rows[0].map(function(h){return(h||"").toLowerCase().trim();});
+  function idx(){var keys=Array.prototype.slice.call(arguments);return headers.findIndex(function(h){return keys.some(function(k){return h===k||h.includes(k);});});}
+  // Colonnes exactes du Sheet Facebook
+  var iFullName=idx("full_name","full name","nom complet","nom");
+  var iFirst=idx("first_name","prenom","prénom","first name");
+  var iLast=idx("last_name","lastname","nom de famille","last name");
+  var iPhone=idx("phone_number","phone","telephone","téléphone","mobile");
+  var iEmail=idx("email","mail","e-mail");
+  var iZip=idx("post_code","post code","code_postal","code postal","zip","postal","cp");
+  var iCity=idx("ville","city");
+  var iDate=idx("created_time","date","heure","soumis");
+  var iCampaign=idx("campaign_name","campagne","campaign","ad_name","publicite");
+  var iMessage=idx("quel_est_votre_projet_?","message","commentaire","projet");
   return rows.slice(1).map(function(row,i){
-    function g(j){return(j>=0&&j<row.length)?(row[j]||"").trim():"";}
-    var fn=g(iFirst)||"",ln=g(iLast)||"";
-    if(!fn&&!ln&&iFullName>=0){var pts=g(iFullName).split(/\s+/);fn=pts[0]||"";ln=pts.slice(1).join(" ")||"";}
-    if(!fn&&!g(iPhone)&&!g(iEmail))return null;
-    return{id:"l_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6),firstName:fn||"—",lastName:ln,email:g(iEmail),phone:g(iPhone),address:"",city:g(iCity),zip:g(iZip),message:"",campaign:g(iCampaign),importedAt:g(iDate)||new Date().toLocaleString("fr-FR"),status:"nouveau",note:"",source:"Facebook",companyId:null,importId:null,importLabel:null};
+    function g(j){return(j>=0&&j<row.length)?(row[j]||"").toString().trim():"";}
+    var fn="",ln="";
+    if(iFullName>=0&&g(iFullName)){
+      var pts=g(iFullName).split(/\s+/);
+      fn=pts[0]||"";ln=pts.slice(1).join(" ")||"";
+    } else {
+      fn=g(iFirst);ln=g(iLast);
+    }
+    var phone=g(iPhone).replace(/^p:/i,"").trim();
+    var email=g(iEmail);
+    var zip=g(iZip).replace(/^p:/i,"").trim();
+    if(!fn&&!phone&&!email)return null;
+    return{
+      id:"l_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6),
+      firstName:fn||"—",lastName:ln,
+      email:email,phone:phone,
+      address:"",city:g(iCity),zip:zip,
+      message:g(iMessage),
+      campaign:g(iCampaign),
+      importedAt:g(iDate)||new Date().toLocaleString("fr-FR"),
+      status:"nouveau",note:"",source:"Facebook",
+      companyId:null,importId:null,importLabel:null
+    };
   }).filter(Boolean);
 }
 function CARow(props){
