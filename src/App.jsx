@@ -553,7 +553,7 @@ function parseGSheetRows(rows){
     }
     var phone=g(iPhone).replace(/^p:/i,"").trim();
     var email=g(iEmail);
-    var zip=g(iZip).replace(/^p:/i,"").trim();
+    var zip=g(iZip).replace(/^[a-z]:/i,"").trim();
     if(!fn&&!phone&&!email)return null;
     return{
       id:"l_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6),
