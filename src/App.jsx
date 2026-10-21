@@ -507,7 +507,7 @@ var GSHEET_API_KEY="AIzaSyBHhvGkHOiPQLAOK2n-5xCZwCGShS67il8";
 // Mapping onglet Google Sheet → company_id
 // À compléter avec les vrais noms d'onglets
 var GSHEET_TAB_MAP={
-  "13 ATM":"c2",
+  "13ATM":"c2",
   "52 ATM":"c5",
   "14 ATM":"c3",
   "30 MH":"c14",
