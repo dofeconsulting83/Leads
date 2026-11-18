@@ -1086,6 +1086,52 @@ function GSheetSyncPanel(props){
   );
 }
 
+function ManualLeadPanel(props){
+  var leads=props.leads,setLeads=props.setLeads,companies=props.companies,setMsg=props.setMsg;
+  var empty={coId:"",firstName:"",lastName:"",phone:"",email:"",zip:"",city:"",message:"",campaign:"",source:"Google Ads"};
+  var [f,setF]=useState(empty);
+  var [saving,setSaving]=useState(false);
+  function upd(k,v){setF(function(p){var o=Object.assign({},p);o[k]=v;return o;});}
+  var sorted=companies.slice().sort(function(a,b){var na=parseInt((a.name.match(/\d+/)||[999])[0],10),nb=parseInt((b.name.match(/\d+/)||[999])[0],10);return na-nb||a.name.localeCompare(b.name);});
+  async function submit(){
+    if(!f.coId){setMsg({type:"error",text:"Choisissez une société."});return;}
+    if(!f.firstName.trim()&&!f.lastName.trim()){setMsg({type:"error",text:"Indiquez au moins un nom ou prénom."});return;}
+    if(!f.phone.trim()&&!f.email.trim()){setMsg({type:"error",text:"Indiquez un téléphone ou un e-mail."});return;}
+    var co=companies.find(function(c){return c.id===f.coId;});
+    var ph=f.phone.replace(/\s/g,""),em=f.email.toLowerCase().trim();
+    var dup=leads.some(function(l){if(l.companyId!==f.coId)return false;return (ph&&(l.phone||"").replace(/\s/g,"")===ph)||(em&&(l.email||"").toLowerCase().trim()===em);});
+    if(dup){setMsg({type:"error",text:"Doublon : un lead avec ce téléphone ou e-mail existe déjà pour "+co.name+"."});return;}
+    setSaving(true);
+    var now=new Date().toLocaleString("fr-FR");
+    var lead={id:"l_man_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),companyId:f.coId,firstName:f.firstName.trim()||"—",lastName:f.lastName.trim(),email:f.email.trim(),phone:f.phone.trim(),address:"",city:f.city.trim(),zip:f.zip.trim(),message:f.message.trim(),campaign:f.campaign.trim()||f.source,importedAt:now,importId:"imp_man_"+Date.now(),importLabel:co.name+" — Saisie manuelle — "+now,status:"nouveau",note:"",source:f.source,assignedTo:null};
+    try{
+      await dbInsert("leads",[leadToRow(lead)]);
+      setLeads(function(prev){return [lead].concat(prev);});
+      if(co.email){fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:1})}).catch(function(){});}
+      setMsg({type:"ok",text:"✓ Lead ajouté pour "+co.name+"."});
+      setF(Object.assign({},empty,{coId:f.coId,source:f.source}));
+    }catch(e){setMsg({type:"error",text:"Erreur : "+e.message});}
+    setSaving(false);
+  }
+  function field(label,k,ph,w){return React.createElement("div",{style:{flex:"1 1 "+(w||170)+"px"}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:3}},label),React.createElement("input",{value:f[k],placeholder:ph||"",onChange:function(e){upd(k,e.target.value);},style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})}));}
+  var row={display:"flex",gap:10,flexWrap:"wrap",marginBottom:10};
+  return React.createElement("div",null,
+    React.createElement("div",{style:row},
+      React.createElement("div",{style:{flex:"1 1 200px"}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:3}},"Société *"),
+        React.createElement("select",{value:f.coId,onChange:function(e){upd("coId",e.target.value);},style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})},
+          [React.createElement("option",{key:"",value:""},"— Choisir —")].concat(sorted.map(function(c){return React.createElement("option",{key:c.id,value:c.id},c.name);})))),
+      React.createElement("div",{style:{flex:"1 1 200px"}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:3}},"Origine *"),
+        React.createElement("select",{value:f.source,onChange:function(e){upd("source",e.target.value);},style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})},
+          ["Google Ads","Facebook","Autre"].map(function(s){return React.createElement("option",{key:s,value:s},s);})))
+    ),
+    React.createElement("div",{style:row},field("Prénom","firstName"),field("Nom","lastName"),field("Téléphone","phone","06 00 00 00 00"),field("E-mail","email","nom@mail.fr",200)),
+    React.createElement("div",{style:row},field("Code postal","zip","",100),field("Ville","city"),field("Campagne (optionnel)","campaign")),
+    React.createElement("div",{style:{marginBottom:12}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:3}},"Message / besoin"),
+      React.createElement("textarea",{value:f.message,onChange:function(e){upd("message",e.target.value);},rows:2,style:Object.assign({},inp,{width:"100%",boxSizing:"border-box",fontFamily:"inherit"})})),
+    React.createElement("button",{onClick:submit,disabled:saving,style:{padding:"9px 20px",borderRadius:8,border:"none",background:saving?"#888":"#185FA5",color:"#fff",fontWeight:500,fontSize:14,cursor:saving?"not-allowed":"pointer"}},saving?"Enregistrement…":"➕ Ajouter le lead")
+  );
+}
+
 function OverviewMonthlyTable(props){
   var leads=props.leads,companies=props.companies,grouped=props.grouped;
   var months=getMoisList(6);
@@ -1209,6 +1255,11 @@ function AdminView(props){
           ),
           React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:14}},"Importe automatiquement les nouveaux leads Facebook depuis le Google Sheet partagé. Les doublons sont ignorés."),
           React.createElement(GSheetSyncPanel,{leads:leads,setLeads:setLeads,companies:companies,grouped:grouped,setMsg:setMsg})
+        )
+,        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginTop:16}},
+          React.createElement("div",{style:{fontWeight:500,marginBottom:6}},"✍️ Saisie manuelle d'un lead"),
+          React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:14}},"Ajoutez un lead à la main (ex. formulaire Google Ads). Les doublons téléphone / e-mail sont bloqués."),
+          React.createElement(ManualLeadPanel,{leads:leads,setLeads:setLeads,companies:companies,setMsg:setMsg})
         )
       ),
 
