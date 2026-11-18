@@ -79,7 +79,7 @@ var INIT_COMPANIES = [
   { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"mh76_societe", email:"normandie@murhumide.fr" },
   { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"cyril.blin@murhumide.fr" },
   { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" },
-  { id:"c22", name:"ATM BFC", network:"renovation", login:"atmbfc", password:"1234", email:"" },
+  { id:"c22", name:"ATM BFC", network:"renovation", login:"atmbfc", password:"1234", email:"pf21@proxifeu.fr" },
 ];
 var ADMIN = { login: "admin", password: "admin123" };
 var MH76_ADMIN = { companyId: "c19", login: "mh76", password: "1234" };
@@ -218,7 +218,7 @@ function fmtVille(l){
 
 function SourceBadge(props){
   var source=props.source||"";
-  var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8"},"Facebook":{bg:"#E7F0FF",color:"#1877F2"},"Contacts":{bg:"#F3F4F6",color:"#555"}};
+  var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8"},"Facebook":{bg:"#E7F0FF",color:"#1877F2"},"Contacts":{bg:"#F3F4F6",color:"#555"},"WhatsApp":{bg:"#E3F8EA",color:"#128C7E"},"Tchatbot":{bg:"#F1E8FB",color:"#7B3FC4"}};
   var s=cfg[source]||{bg:"#F3F4F6",color:"#888"};
   if(!source)return null;
   return React.createElement("span",{style:{fontSize:10,padding:"2px 7px",borderRadius:8,background:s.bg,color:s.color,fontWeight:500,whiteSpace:"nowrap"}},source);
@@ -1107,8 +1107,12 @@ function ManualLeadPanel(props){
     try{
       await dbInsert("leads",[leadToRow(lead)]);
       setLeads(function(prev){return [lead].concat(prev);});
-      if(co.email){fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:1})}).catch(function(){});}
-      setMsg({type:"ok",text:"✓ Lead ajouté pour "+co.name+"."});
+      var alertTxt=" — ⚠ aucune alerte e-mail (pas d'adresse pour cette société)";
+      if(co.email){
+        try{var r=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:1})});alertTxt=r.ok?" — 📧 alerte envoyée à "+co.email:" — ⚠ échec de l'alerte e-mail";}
+        catch(e2){alertTxt=" — ⚠ échec de l'alerte e-mail";}
+      }
+      setMsg({type:"ok",text:"✓ Lead ajouté pour "+co.name+alertTxt+"."});
       setF(Object.assign({},empty,{coId:f.coId,source:f.source}));
     }catch(e){setMsg({type:"error",text:"Erreur : "+e.message});}
     setSaving(false);
@@ -1122,7 +1126,7 @@ function ManualLeadPanel(props){
           [React.createElement("option",{key:"",value:""},"— Choisir —")].concat(sorted.map(function(c){return React.createElement("option",{key:c.id,value:c.id},c.name);})))),
       React.createElement("div",{style:{flex:"1 1 200px"}},React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:3}},"Origine *"),
         React.createElement("select",{value:f.source,onChange:function(e){upd("source",e.target.value);},style:Object.assign({},inp,{width:"100%",boxSizing:"border-box"})},
-          ["Google Ads","Facebook","Autre"].map(function(s){return React.createElement("option",{key:s,value:s},s);})))
+          ["Google Ads","Facebook","WhatsApp","Tchatbot","Autre"].map(function(s){return React.createElement("option",{key:s,value:s},s);})))
     ),
     React.createElement("div",{style:row},field("Prénom","firstName"),field("Nom","lastName"),field("Téléphone","phone","06 00 00 00 00"),field("E-mail","email","nom@mail.fr",200)),
     React.createElement("div",{style:row},field("Code postal","zip","",100),field("Ville","city"),field("Campagne (optionnel)","campaign")),
@@ -1236,9 +1240,9 @@ function AdminView(props){
           React.createElement("div",{style:{marginBottom:14}},
             React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Origine (auto-détection si non sélectionnée)"),
             React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-              ["","Google Ads","Facebook","Contacts"].map(function(s){
+              ["","Google Ads","Facebook","WhatsApp","Tchatbot","Contacts"].map(function(s){
                 var active=sourceOverride===s;
-                var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8"},"Facebook":{bg:"#E7F0FF",color:"#1877F2"},"Contacts":{bg:"#F3F4F6",color:"#555"},"":{}};
+                var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8"},"Facebook":{bg:"#E7F0FF",color:"#1877F2"},"Contacts":{bg:"#F3F4F6",color:"#555"},"WhatsApp":{bg:"#E3F8EA",color:"#128C7E"},"Tchatbot":{bg:"#F1E8FB",color:"#7B3FC4"},"":{}};
                 var c=cfg[s]||{};
                 return React.createElement("button",{key:s,onClick:function(){setSourceOverride(s);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(active?(c.color||"#185FA5"):"var(--color-border-secondary)"),background:active?(c.bg||"#E6F1FB"):"transparent",color:active?(c.color||"#185FA5"):"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},s||"Auto-détection");
               })
