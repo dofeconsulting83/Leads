@@ -1063,7 +1063,7 @@ function GSheetSyncPanel(props){
         await dbInsert("leads",withCo.map(leadToRow));
         setLeads(function(prev){return withCo.concat(prev);});
         totalNew+=newLeads.length;
-        if(co.email){fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:newLeads.length})}).catch(function(){});}
+        if(co.email){fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:newLeads.length,source:"Facebook"})}).catch(function(){});}
       }catch(e){errors.push(tabName+" : "+e.message);}
     }
     setSyncing(false);setProgress(null);
@@ -1109,7 +1109,7 @@ function ManualLeadPanel(props){
       setLeads(function(prev){return [lead].concat(prev);});
       var alertTxt=" — ⚠ aucune alerte e-mail (pas d'adresse pour cette société)";
       if(co.email){
-        try{var r=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:1})});alertTxt=r.ok?" — 📧 alerte envoyée à "+co.email:" — ⚠ échec de l'alerte e-mail";}
+        try{var r=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:co.name,companyEmail:co.email,count:1,source:f.source})});alertTxt=r.ok?" — 📧 alerte envoyée à "+co.email:" — ⚠ échec de l'alerte e-mail";}
         catch(e2){alertTxt=" — ⚠ échec de l'alerte e-mail";}
       }
       setMsg({type:"ok",text:"✓ Lead ajouté pour "+co.name+alertTxt+"."});
@@ -1207,7 +1207,7 @@ function AdminView(props){
         var txt="✓ "+newLeads.length+" lead"+(newLeads.length>1?"s":"")+" importé"+(newLeads.length>1?"s":"")+" ("+finalSource+") pour "+(selCo?selCo.name:"");
         if(skipped>0)txt+=" · "+skipped+" doublon"+(skipped>1?"s":"")+" ignoré"+(skipped>1?"s":"");
         setMsg({type:"ok",text:txt+"."});
-        if(selCo&&selCo.email){fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:selCo.name,companyEmail:selCo.email,count:newLeads.length})}).catch(function(){});}
+        if(selCo&&selCo.email){fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({companyName:selCo.name,companyEmail:selCo.email,count:newLeads.length,source:finalSource})}).catch(function(){});}
       }catch(err){setMsg({type:"error",text:"Erreur import : "+err.message});}
       setUploading(false);e.target.value="";
     }catch(err){setMsg({type:"error",text:"Erreur lecture : "+err.message});}
