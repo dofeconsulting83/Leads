@@ -1139,7 +1139,7 @@ function GSheetSyncPanel(props){
         var active=selTabs.indexOf(tab)>=0;
         var co=companies.find(function(c){return c.id===GSHEET_TAB_MAP[tab];});
         var nk=co?co.network:"renovation";
-        return React.createElement("button",{key:tab,onClick:function(){setSelTabs(function(prev){return active?prev.filter(function(t){return t!==tab;}):prev.concat(tab);});},style:{padding:"4px 10px",borderRadius:7,border:"1px solid "+(active?NETWORKS[nk].color:"var(--color-border-secondary)"),background:active?NETWORKS[nk].light:"transparent",color:active?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},tab);
+        return React.createElement("button",{key:tab,onClick:function(){setSelTabs(function(prev){return active?prev.filter(function(t){return t!==tab;}):prev.concat(tab);});},style:{padding:"6px 14px",borderRadius:999,border:"1px solid "+(active?NETWORKS[nk].color:"var(--color-border-secondary)"),background:active?NETWORKS[nk].light:"#fff",color:active?NETWORKS[nk].color:"#4a5565",fontSize:13,cursor:"pointer",fontWeight:active?600:400}},(active?"✓ ":"")+tab);
       })
     ),
     progress&&React.createElement("div",{style:{fontSize:12,color:"#1877F2",marginBottom:10,padding:"8px 12px",background:"#E7F0FF",borderRadius:8}},progress),
@@ -1306,6 +1306,25 @@ function AdminDashboard(props){
           React.createElement("div",{style:{flex:1,minWidth:140}},st.items.map(function(it){return React.createElement("div",{key:it.name,style:{display:"flex",alignItems:"center",gap:8,padding:"5px 0",fontSize:13}},React.createElement("span",{style:{width:9,height:9,borderRadius:"50%",background:it.color}}),React.createElement("span",{style:{flex:1}},it.name),React.createElement("span",{style:{color:"#6b7684"}},Math.round(it.value/total*100)+" %"));}))))));
 }
 
+function CardHead(props){
+  return React.createElement("div",{style:{display:"flex",alignItems:"center",gap:14,marginBottom:props.mb===undefined?16:props.mb}},
+    React.createElement("div",{style:{width:44,height:44,borderRadius:12,background:props.bg||"#E6F1FB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}},props.icon),
+    React.createElement("div",{style:{flex:1,minWidth:0}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{fontWeight:700,fontSize:16,color:"#12263f"}},props.title),props.badge&&React.createElement("span",{style:{fontSize:11.5,background:"#E7F0FF",color:"#1877F2",padding:"3px 10px",borderRadius:999,fontWeight:600}},props.badge)),
+      props.sub&&React.createElement("div",{style:{fontSize:13,color:"#6b7684",marginTop:2}},props.sub)),
+    props.right||null);
+}
+
+function KpiRow(props){
+  return React.createElement("div",{style:{display:"flex",gap:14,flexWrap:"wrap",marginBottom:18}},props.items.map(function(it){
+    return React.createElement("div",{key:it.label,style:{background:"#fff",borderRadius:16,boxShadow:"0 2px 12px rgba(20,40,80,.06)",border:"1px solid #eef1f6",padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flex:"1 1 200px",minWidth:190}},
+      React.createElement("div",{style:{width:44,height:44,borderRadius:12,background:it.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}},it.icon),
+      React.createElement("div",null,React.createElement("div",{style:{fontSize:12.5,color:"#6b7684"}},it.label),React.createElement("div",{style:{fontSize:22,fontWeight:700,color:"#12263f",lineHeight:1.25}},it.value)));
+  }));
+}
+
+var TAB_DESC={import:"Importez des leads par fichier CSV, synchronisez Google Sheets ou saisissez-les à la main.",imports:"Retrouvez chaque import effectué et gérez-le.",overview:"Répartition des leads par statut et par société, mois par mois.",ca:"Suivi du chiffre d'affaires facturé par société.",stats:"Statistiques de leads par canal d'acquisition.",connexions:"Qui s'est connecté, quand, et à quelle fréquence.",companies:"Gérez les sociétés et leurs mots de passe."};
+
 function AdminView(props){
   var leads=props.leads,setLeads=props.setLeads,companies=props.companies,setCompanies=props.setCompanies,onLogout=props.onLogout;
   var fileRef=useRef();
@@ -1365,50 +1384,52 @@ function AdminView(props){
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},React.createElement("button",{className:"dl-burger",onClick:function(){setNavOpen(true);},style:{border:"1px solid #e3e8ef",background:"#fff",borderRadius:9,padding:"6px 11px",fontSize:16,cursor:"pointer"}},"☰"),React.createElement("div",{style:{fontSize:18,fontWeight:700,color:"#12263f"}},tab==="dashboard"?"Administration":curTab[2])),
         React.createElement("button",{onClick:onLogout,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500}},"Déconnexion")),
       React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500}},
-      msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},msg.text,React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")),
+      tab!=="dashboard"&&TAB_DESC[tab]&&React.createElement("div",{style:{fontSize:14,color:"#6b7684",marginBottom:18}},TAB_DESC[tab]),
+      msg&&React.createElement("div",{style:{padding:"12px 16px",borderRadius:12,background:msg.type==="ok"?"#E8F6EC":"#FDECEC",color:msg.type==="ok"?"#1E6B35":"#9B2C2C",marginBottom:16,fontSize:13.5,display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid "+(msg.type==="ok"?"#CDEBD6":"#F6CFCF")}},React.createElement("span",null,(msg.type==="ok"?"✅ ":"⚠️ ")+msg.text),React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit",fontSize:15}},"✕")),
 
       tab==="dashboard"&&React.createElement(AdminDashboard,{leads:leads,companies:companies,importGroups:importGroups,go:setTab}),
 
       tab==="import"&&React.createElement("div",null,
-        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:16}},
-          React.createElement("div",{style:{fontWeight:500,marginBottom:14}},"Importer un fichier CSV"),
+        React.createElement("div",{style:{background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:22,marginBottom:16}},
+          React.createElement(CardHead,{icon:"⬆️",bg:"#E6F1FB",title:"Importer un fichier CSV",sub:"Choisissez la société destinataire et l'origine des contacts."}),
+          React.createElement("div",{style:{display:"flex",gap:22,flexWrap:"wrap"}},
+          React.createElement("div",{style:{flex:"3 1 460px",minWidth:0}},
           React.createElement("div",{style:{marginBottom:14}},
-            React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Société destinataire"),
-            ["renovation","humidite"].map(function(nk){return React.createElement("div",{key:nk,style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:NETWORKS[nk].color,fontWeight:500,marginBottom:4}},NETWORKS[nk].label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},companies.filter(function(c){return c.network===nk;}).slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});}).map(function(c){return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"5px 11px",borderRadius:7,border:"1px solid "+(selId===c.id?NETWORKS[nk].color:"var(--color-border-secondary)"),background:selId===c.id?NETWORKS[nk].light:"transparent",color:selId===c.id?NETWORKS[nk].color:"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:selId===c.id?500:400}},c.name);})));})
+            React.createElement("div",{style:{fontSize:12,color:"#6b7684",fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:.4}},"Société destinataire"),
+            ["renovation","humidite"].map(function(nk){return React.createElement("div",{key:nk,style:{marginBottom:12}},React.createElement("div",{style:{fontSize:12,color:NETWORKS[nk].color,fontWeight:600,marginBottom:6}},NETWORKS[nk].label),React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},companies.filter(function(c){return c.network===nk;}).slice().sort(function(a,b){return a.name.localeCompare(b.name,undefined,{numeric:true});}).map(function(c){var on=selId===c.id;return React.createElement("button",{key:c.id,onClick:function(){setSelId(c.id);},style:{padding:"6px 14px",borderRadius:999,border:"1px solid "+(on?NETWORKS[nk].color:"#e3e8ef"),background:on?NETWORKS[nk].light:"#fff",color:on?NETWORKS[nk].color:"#4a5565",fontSize:13,cursor:"pointer",fontWeight:on?600:400,boxShadow:on?"0 2px 8px rgba(0,0,0,.08)":"none"}},(on?"✓ ":"")+c.name);})));})
           ),
-          selCo&&React.createElement("div",{style:{background:"var(--color-background-secondary)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12}},"Société : ",React.createElement("b",{style:{color:NETWORKS[selCo.network].color}},selCo.name)," · "+(grouped[selCo.id]||[]).length+" lead(s) en base"),
-          React.createElement("div",{style:{marginBottom:14}},
-            React.createElement("div",{style:{fontSize:11,color:"var(--color-text-secondary)",marginBottom:6}},"Origine (auto-détection si non sélectionnée)"),
-            React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-              ["","Google Ads","Facebook","WhatsApp","Tchatbot","Contacts"].map(function(s){
-                var active=sourceOverride===s;
-                var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8"},"Facebook":{bg:"#E7F0FF",color:"#1877F2"},"Contacts":{bg:"#F3F4F6",color:"#555"},"WhatsApp":{bg:"#E3F8EA",color:"#128C7E"},"Tchatbot":{bg:"#F1E8FB",color:"#7B3FC4"},"":{}};
-                var c=cfg[s]||{};
-                return React.createElement("button",{key:s,onClick:function(){setSourceOverride(s);},style:{padding:"4px 12px",borderRadius:8,border:"1px solid "+(active?(c.color||"#185FA5"):"var(--color-border-secondary)"),background:active?(c.bg||"#E6F1FB"):"transparent",color:active?(c.color||"#185FA5"):"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},s||"Auto-détection");
+          selCo&&React.createElement("div",{style:{background:"#f6f8fb",borderRadius:12,padding:"11px 16px",marginBottom:16,fontSize:13,color:"#4a5565"}},"🏢 Société : ",React.createElement("b",{style:{color:NETWORKS[selCo.network].color}},selCo.name)," · "+(grouped[selCo.id]||[]).length+" lead(s) en base"),
+          React.createElement("div",{style:{marginBottom:16}},
+            React.createElement("div",{style:{fontSize:12,color:"#6b7684",fontWeight:600,marginBottom:8,textTransform:"uppercase",letterSpacing:.4}},"Origine (auto-détection si non sélectionnée)"),
+            React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+              ["","Google Ads","Facebook","WhatsApp","Tchatbot","Contacts"].map(function(s2){
+                var active=sourceOverride===s2;
+                var cfg={"Google Ads":{bg:"#E8F0FE",color:"#1A73E8",ic:"🔎"},"Facebook":{bg:"#E7F0FF",color:"#1877F2",ic:"📘"},"Contacts":{bg:"#F3F4F6",color:"#555",ic:"📇"},"WhatsApp":{bg:"#E3F8EA",color:"#128C7E",ic:"💬"},"Tchatbot":{bg:"#F1E8FB",color:"#7B3FC4",ic:"🤖"},"":{ic:"✨"}};
+                var c=cfg[s2]||{};
+                return React.createElement("button",{key:s2,onClick:function(){setSourceOverride(s2);},style:{padding:"7px 15px",borderRadius:999,border:"1px solid "+(active?(c.color||"#185FA5"):"#e3e8ef"),background:active?(c.bg||"#E6F1FB"):"#fff",color:active?(c.color||"#185FA5"):"#4a5565",fontSize:13,cursor:"pointer",fontWeight:active?600:400,display:"inline-flex",alignItems:"center",gap:6}},React.createElement("span",null,c.ic),s2||"Auto-détection");
               })
             )
-          ),
+          )),
           React.createElement("input",{type:"file",accept:".csv",ref:fileRef,onChange:handleFile,style:{display:"none"}}),
-          React.createElement("button",{onClick:function(){if(selId&&!uploading)fileRef.current.click();},style:{padding:"9px 20px",borderRadius:8,border:"none",background:selCo?NETWORKS[selCo.network].color:"#888",color:"#fff",fontWeight:500,fontSize:14,cursor:selCo&&!uploading?"pointer":"not-allowed",opacity:uploading?0.7:1}},uploading?"Import en cours…":"⬆ Choisir le fichier CSV")
+          React.createElement("div",{onClick:function(){if(selId&&!uploading)fileRef.current.click();},onDragOver:function(e){e.preventDefault();},onDrop:function(e){e.preventDefault();if(selId&&!uploading&&e.dataTransfer.files&&e.dataTransfer.files.length)handleFile({target:{files:e.dataTransfer.files,value:""}});},style:{flex:"1 1 260px",minHeight:190,border:"2px dashed "+(selCo?NETWORKS[selCo.network].color:"#c9d2de"),borderRadius:16,background:selCo?NETWORKS[selCo.network].light:"#f6f8fb",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,textAlign:"center",padding:20,cursor:selCo&&!uploading?"pointer":"not-allowed",opacity:uploading?0.7:1}},
+            React.createElement("div",{style:{fontSize:38}},uploading?"⏳":"☁️"),
+            React.createElement("div",{style:{fontWeight:600,color:"#12263f"}},uploading?"Import en cours…":"Glissez-déposez votre fichier CSV"),
+            React.createElement("div",{style:{fontSize:13,color:"#6b7684"}},"ou cliquez pour le sélectionner"),
+            React.createElement("div",{style:{marginTop:6,padding:"9px 20px",borderRadius:10,background:selCo?NETWORKS[selCo.network].color:"#888",color:"#fff",fontWeight:600,fontSize:14}},"⬆ Choisir le fichier CSV")))
         ),
 
-        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20}},
-          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:6}},
-            React.createElement("div",{style:{fontWeight:500}},"🔄 Synchroniser depuis Google Sheets"),
-            React.createElement("span",{style:{fontSize:11,background:"#E7F0FF",color:"#1877F2",padding:"2px 8px",borderRadius:8,fontWeight:500}},"Facebook")
-          ),
-          React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:14}},"Importe automatiquement les nouveaux leads Facebook depuis le Google Sheet partagé. Les doublons sont ignorés."),
+        React.createElement("div",{style:{background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:22}},
+          React.createElement(CardHead,{icon:"🔄",bg:"#E3F6E8",title:"Synchroniser depuis Google Sheets",badge:"Facebook",sub:"Importe automatiquement les nouveaux leads Facebook depuis le Google Sheet partagé. Les doublons sont ignorés."}),
           React.createElement(GSheetSyncPanel,{leads:leads,setLeads:setLeads,companies:companies,grouped:grouped,setMsg:setMsg})
-        )
-,        React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginTop:16}},
-          React.createElement("div",{style:{fontWeight:500,marginBottom:6}},"✍️ Saisie manuelle d'un lead"),
-          React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:14}},"Ajoutez un lead à la main (ex. formulaire Google Ads). Les doublons téléphone / e-mail sont bloqués."),
+        ),
+        React.createElement("div",{style:{background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:22,marginTop:16}},
+          React.createElement(CardHead,{icon:"✍️",bg:"#FAEEDA",title:"Saisie manuelle d'un lead",sub:"Ajoutez un lead à la main (Google Ads, WhatsApp, tchatbot…). Les doublons téléphone / e-mail sont bloqués."}),
           React.createElement(ManualLeadPanel,{leads:leads,setLeads:setLeads,companies:companies,setMsg:setMsg})
         )
       ),
 
       tab==="imports"&&React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},importGroups.length+" import(s)"),
+        React.createElement(KpiRow,{items:[{icon:"🗂️",bg:"#E6F1FB",label:"Imports",value:importGroups.length},{icon:"👥",bg:"#E3F6E8",label:"Leads importés",value:importGroups.reduce(function(a,g){return a+g.leads.length;},0)},{icon:"🏢",bg:"#FAEEDA",label:"Sociétés concernées",value:Object.keys(importGroups.reduce(function(a,g){a[g.companyId]=1;return a;},{})).length}]}),
         importGroups.length===0&&React.createElement("div",{style:{padding:32,textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)"}},"Aucun import."),
         React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
           importGroups.map(function(g){var co=companies.find(function(c){return c.id===g.companyId;}),net=co?NETWORKS[co.network]:NETWORKS.renovation;return React.createElement("div",{key:g.id,style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:"12px 16px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}},React.createElement("div",null,React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:4}},React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500}},co?co.name:"Société inconnue"),React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},g.leads.length+" lead"+(g.leads.length>1?"s":""))),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:6}},g.label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},STATUSES.filter(function(s){return g.leads.some(function(l){return l.status===s.key;});}).map(function(s){return React.createElement("span",{key:s.key,style:{fontSize:11,padding:"1px 8px",borderRadius:8,background:s.bg,color:s.color}},g.leads.filter(function(l){return l.status===s.key;}).length+" "+s.label);}))),React.createElement("button",{onClick:function(){deleteImport(g.id,g.leads.length);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid #F7C1C1",background:"transparent",color:"#A32D2D",fontSize:12,cursor:"pointer",fontWeight:500}},"🗑 Supprimer")));})
@@ -1430,7 +1451,7 @@ function AdminView(props){
       tab==="stats"&&React.createElement(LeadsStatsAdminView,{companies:companies}),
 
       tab==="connexions"&&React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},loginHistory.length+" connexion(s)"),
+        React.createElement(KpiRow,{items:[{icon:"🔐",bg:"#E6F1FB",label:"Connexions (200 dernières)",value:loginHistory.length},{icon:"📅",bg:"#E3F6E8",label:"Aujourd'hui",value:loginHistory.filter(function(h){return h.login_at&&new Date(h.login_at).toDateString()===new Date().toDateString();}).length},{icon:"👤",bg:"#EEEDFE",label:"Utilisateurs distincts",value:Object.keys(loginHistory.reduce(function(a,h){a[(h.company_id||"")+"|"+(h.user_name||"")]=1;return a;},{})).length}]}),
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,marginBottom:20}},
           companies.map(function(c){var net=NETWORKS[c.network],history=loginHistory.filter(function(h){return h.company_id===c.id;}),last=history[0],lastDate=last?new Date(last.login_at):null,daysSince=lastDate?Math.floor((Date.now()-lastDate)/86400000):null;var col=daysSince===null?"#9c9a94":daysSince===0?"#27500A":daysSince<=3?"#633806":"#A32D2D";var bg=daysSince===null?"#f5f5f3":daysSince===0?"#EAF3DE":daysSince<=3?"#FAEEDA":"#FCEBEB";var label=daysSince===null?"Jamais connecté":daysSince===0?"Connecté aujourd'hui":daysSince===1?"Il y a 1 jour":"Il y a "+daysSince+" jours";return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid var(--color-border-tertiary)",padding:"10px 14px"}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:6}},React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:13}},c.name)),React.createElement("div",{style:{fontSize:11,padding:"2px 8px",borderRadius:8,background:bg,color:col,display:"inline-block",marginBottom:4,fontWeight:500}},label),React.createElement("div",{style:{fontSize:11,color:"var(--color-text-tertiary)"}},history.length+" connexion"+(history.length>1?"s":"")+(lastDate?" · "+lastDate.toLocaleDateString("fr-FR")+" "+lastDate.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"")));})
         ),
@@ -1469,7 +1490,8 @@ function AdminView(props){
       ),
 
       tab==="companies"&&React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:12}},"Cliquez sur \"Modifier\" pour changer le mot de passe."),
+        React.createElement(KpiRow,{items:[{icon:"🏢",bg:"#FAEEDA",label:"Sociétés",value:companies.length},{icon:"🏠",bg:"#E6F1FB",label:"Atriome",value:companies.filter(function(c){return c.network==="renovation";}).length},{icon:"💧",bg:"#E3F6E8",label:"MurHumide",value:companies.filter(function(c){return c.network==="humidite";}).length}]}),
+        React.createElement("div",{style:{fontSize:13,color:"#6b7684",marginBottom:12}},"Cliquez sur \"Modifier\" pour changer le mot de passe."),
         React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
           companies.map(function(c){var net=NETWORKS[c.network],isEdit=editId===c.id;return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid "+(isEdit?net.color:"var(--color-border-tertiary)"),padding:"12px 16px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:14}},c.name),React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Login : ",React.createElement("b",null,c.login))),React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},(grouped[c.id]||[]).length+" leads"),isEdit?React.createElement("button",{onClick:function(){setEditId(null);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Annuler"):React.createElement("button",{onClick:function(){setEditId(c.id);setEditPwd(c.password);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"✏ Modifier mdp"))),isEdit&&React.createElement("div",{style:{marginTop:12,padding:"12px 14px",background:"var(--color-background-secondary)",borderRadius:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Actuel : ",React.createElement("b",null,c.password)),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Nouveau :"),React.createElement("input",{value:editPwd,onChange:function(e){setEditPwd(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&editPwd)savePassword(c.id,editPwd);},placeholder:"Nouveau mot de passe",autoFocus:true,style:{padding:"6px 10px",borderRadius:7,border:"1px solid "+net.color,fontSize:13,background:"var(--color-background-primary)",color:"var(--color-text-primary)",flex:1,minWidth:180,outline:"none"}}),React.createElement("button",{onClick:function(){if(editPwd)savePassword(c.id,editPwd);},disabled:!editPwd,style:{padding:"6px 16px",borderRadius:7,border:"none",background:editPwd?net.color:"#ccc",color:"#fff",fontWeight:500,fontSize:13,cursor:editPwd?"pointer":"not-allowed"}},"✓ Enregistrer")));})
         )
