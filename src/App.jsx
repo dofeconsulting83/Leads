@@ -402,7 +402,7 @@ function LeadsStatsView(props){
     }).catch(function(){setStats([]);setNetStats([]);setLoading(false);});
   },[company.id,company.network,annee]);
 
-  function renderTable(data,title,color){
+  function renderTable(data,title,color,light){
     var grandTotal={};STATS_MONTHS.forEach(function(m){grandTotal[m]=0;});
     var fixedRows=STATS_SOURCES.map(function(src,si){
       var row=(data||[]).find(function(r){return r.source===src;})||{};
@@ -415,7 +415,7 @@ function LeadsStatsView(props){
       );
     });
     var gt=STATS_MONTHS.reduce(function(s,m){return s+(grandTotal[m]||0);},0);
-    var totalRow=React.createElement("tr",{key:"total",style:{background:net.light,borderTop:"2px solid "+color}},
+    var totalRow=React.createElement("tr",{key:"total",style:{background:light||net.light,borderTop:"2px solid "+color}},
       React.createElement("td",{style:{padding:"10px 14px",fontWeight:700,color:color}},"TOTAL"),
       STATS_MONTHS.map(function(m){var v=grandTotal[m]||0;return React.createElement("td",{key:m,style:{padding:"10px 10px",textAlign:"center",fontWeight:700,color:color}},v>0?v:"—");}),
       React.createElement("td",{style:{padding:"10px 14px",textAlign:"center",fontWeight:700,color:color}},gt>0?gt:"—")
@@ -468,29 +468,33 @@ function LeadsStatsView(props){
   var currentTitle=viewMode==="reseau"?"Stats Réseau "+NETWORKS[company.network].label:"Stats Leads — "+company.name;
   var hasData=currentData&&currentData.length>0;
 
-  return React.createElement("div",{style:{padding:16}},
-    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}},
+  var isNet=viewMode==="reseau",accent=isNet?"#0d2c4d":net.color,accentLight=isNet?"#E8EEF6":net.light;
+  return React.createElement("div",{style:{padding:"0 0 16px"}},
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
-        React.createElement("div",{style:{fontWeight:500,fontSize:15}},"📊 Contacts entrants"),
-        React.createElement("select",{value:annee,onChange:function(e){setAnnee(e.target.value);},style:Object.assign({},inp,{padding:"5px 8px",fontSize:12})},
+        React.createElement("div",{style:{fontWeight:700,fontSize:16,color:"#12263f"}},"📊 Contacts entrants"),
+        React.createElement("select",{value:annee,onChange:function(e){setAnnee(e.target.value);},style:Object.assign({},inp,{padding:"7px 10px",fontSize:13})},
           ["2024","2025","2026"].map(function(y){return React.createElement("option",{key:y,value:y},y);})
         ),
-        React.createElement("div",{style:{display:"flex",gap:4,background:"var(--color-background-secondary)",borderRadius:8,padding:3}},
-          [["societe","Ma société"],["reseau","Réseau "+NETWORKS[company.network].label]].map(function(item){
-            var active=viewMode===item[0];
-            return React.createElement("button",{key:item[0],onClick:function(){setViewMode(item[0]);},style:{padding:"5px 12px",borderRadius:6,border:"none",background:active?net.color:"transparent",color:active?"#fff":"var(--color-text-secondary)",fontSize:12,cursor:"pointer",fontWeight:active?500:400}},item[1]);
+        React.createElement("div",{style:{display:"flex",gap:4,background:"#fff",border:"1px solid #e3e8ef",borderRadius:12,padding:4}},
+          [["societe","🏢 Ma société · "+company.name],["reseau","🌐 Réseau "+NETWORKS[company.network].label+" (toutes sociétés)"]].map(function(item){
+            var active=viewMode===item[0],c=item[0]==="reseau"?"#0d2c4d":net.color;
+            return React.createElement("button",{key:item[0],onClick:function(){setViewMode(item[0]);},style:{padding:"7px 14px",borderRadius:9,border:"none",background:active?c:"transparent",color:active?"#fff":"#5b6573",fontSize:13,cursor:"pointer",fontWeight:active?600:500}},item[1]);
           })
         )
       ),
-      hasData&&React.createElement("button",{onClick:function(){exportPDF(currentData,currentTitle);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"📄 Exporter PDF")
+      hasData&&React.createElement("button",{onClick:function(){exportPDF(currentData,currentTitle);},style:{padding:"8px 16px",borderRadius:10,border:"1px solid "+accent,background:accentLight,color:accent,fontSize:13,cursor:"pointer",fontWeight:600}},"📄 Exporter PDF")
     ),
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderRadius:12,background:accentLight,borderLeft:"4px solid "+accent,color:accent,fontSize:13.5,marginBottom:14}},
+      React.createElement("span",{style:{fontSize:18}},isNet?"🌐":"🏢"),
+      React.createElement("span",null,isNet?React.createElement("span",null,React.createElement("b",null,"Chiffres de tout le réseau "+NETWORKS[company.network].label),", toutes sociétés confondues — ce ne sont pas les contacts de ",company.name,"."):React.createElement("span",null,React.createElement("b",null,"Contacts de "+company.name+" uniquement"),". Pour comparer avec l'ensemble du réseau, choisissez « Réseau »."))),
     !hasData
       ? React.createElement("div",{style:{padding:40,textAlign:"center",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",color:"var(--color-text-secondary)"}},
           React.createElement("div",{style:{fontSize:28,marginBottom:10}},"📊"),
           React.createElement("div",{style:{fontWeight:500,marginBottom:4}},"Aucune donnée pour "+annee),
           React.createElement("div",{style:{fontSize:13}},"L'administrateur n'a pas encore importé le fichier de statistiques.")
         )
-      : renderTable(currentData,currentTitle,net.color)
+      : renderTable(currentData,currentTitle,accent,accentLight)
   );
 }
 
@@ -1066,7 +1070,7 @@ function CompanyView(props){
   var ghost={padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500};
   var initials=company.name.replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase();
   return React.createElement("div",{style:{minHeight:"100vh",background:"linear-gradient(180deg,#eef3fa 0%,#f7f9fc 40%)",fontSize:14,color:"#1a2433"}},
-    React.createElement("style",null,DOFE_CSS+".dl-row{transition:background .12s}.dl-row:hover{background:#f6f9fd}.dl-act:hover{filter:brightness(.95)}"),
+    React.createElement("style",null,DOFE_CSS+ADMIN_THEME_CSS+".dl-row{transition:background .12s}.dl-row:hover{background:#f6f9fd}.dl-act:hover{filter:brightness(.95)}"),
     React.createElement("div",{style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(8px)",borderBottom:"1px solid #e9edf3",padding:"12px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:50,flexWrap:"wrap",gap:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",gap:16}},
         React.createElement("img",{src:LOGO_SRC,alt:"Dofelink",style:{height:38}}),
@@ -1077,8 +1081,8 @@ function CompanyView(props){
         React.createElement("button",{onClick:onLogout,style:ghost},"Déconnexion"),
         React.createElement("div",{title:company.name,style:{width:38,height:38,borderRadius:"50%",background:net.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}},initials))
     ),
-    React.createElement("div",{style:{maxWidth:1400,margin:"0 auto",padding:"22px 24px 40px"}},
-      React.createElement("div",{className:"dofe-in",style:{display:"flex",gap:20,flexWrap:"wrap",alignItems:"center",marginBottom:22}},
+    React.createElement("div",{className:"dl-admin",style:{maxWidth:1400,margin:"0 auto",padding:"22px 24px 40px"}},
+      activeTab==="leads"&&React.createElement("div",{className:"dofe-in",style:{display:"flex",gap:20,flexWrap:"wrap",alignItems:"center",marginBottom:22}},
         React.createElement("div",{style:{flex:"1 1 100%"}},
           React.createElement("div",{style:{fontSize:28,fontWeight:700,color:"#12263f"}},"Bonjour 👋"),
           React.createElement("div",{style:{fontSize:14.5,color:"#6b7684",marginTop:2}},"Voici les leads de votre société ",React.createElement("b",{style:{color:"#12263f"}},company.name),".")),
@@ -1557,6 +1561,41 @@ function makeSubAdminTable(paginated,shown,page,net,selected,toggleAll,toggleSel
   );
 }
 
+var ADMIN_THEME_CSS=".dl-admin{--color-background-primary:#fff;--color-background-secondary:#f6f8fb;--color-background-tertiary:#eef3fa;--color-border-tertiary:#e9edf3;--color-border-secondary:#d9e0ea;--color-text-secondary:#5b6573;--color-text-tertiary:#8a95a5;--color-text-primary:#1a2433}.dl-admin div[style*='border-radius: 10px'][style*='solid'],.dl-admin div[style*='border-radius: 12px'][style*='solid'],.dl-admin div[style*='border-radius: 14px'][style*='solid']{border-radius:16px!important;box-shadow:0 2px 12px rgba(20,40,80,.06);border-color:#eef1f6!important}.dl-admin table{border-collapse:collapse}.dl-admin th{text-transform:uppercase;letter-spacing:.4px;font-size:11px!important;font-weight:600!important;color:#6b7684!important;background:#f6f8fb!important}.dl-admin tbody tr{transition:background .12s}.dl-admin tbody tr:hover{background:#f6f9fd!important}.dl-admin button[style*='border-radius: 8px'],.dl-admin button[style*='border-radius: 7px'],.dl-admin button[style*='border-radius: 9px']{border-radius:10px!important}.dl-admin input:not([type=checkbox]):not([type=file]),.dl-admin select,.dl-admin textarea{border-radius:10px!important;border-color:#d9e0ea!important;background-color:#fff}.dl-admin input:focus,.dl-admin select:focus,.dl-admin textarea:focus{outline:none;border-color:#185FA5!important;box-shadow:0 0 0 3px rgba(24,95,165,.15)}.dl-admin h2,.dl-admin h3{color:#12263f}";
+
+function SubHeader(props){
+  var net=props.net,ini=(props.title||"").replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase();
+  return React.createElement("div",{style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(8px)",borderBottom:"1px solid #e9edf3",padding:"12px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:50,flexWrap:"wrap",gap:10}},
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:16}},
+      React.createElement("img",{src:LOGO_SRC,alt:"Dofelink",style:{height:38}}),
+      React.createElement("div",{style:{width:1,height:30,background:"#e3e8ef"}}),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,padding:"7px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff"}},React.createElement("span",{style:{width:9,height:9,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:600}},props.title),React.createElement("span",{style:{fontSize:11.5,background:net.light,color:net.color,padding:"2px 9px",borderRadius:999}},net.label))),
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+      React.createElement("button",{onClick:props.onLogout,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500}},"Déconnexion"),
+      React.createElement("div",{style:{width:38,height:38,borderRadius:"50%",background:net.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}},ini)));
+}
+
+function Pills(props){
+  return React.createElement("div",{style:{display:"inline-flex",gap:4,padding:5,borderRadius:14,background:"#fff",border:"1px solid #eef1f6",boxShadow:"0 2px 8px rgba(20,40,80,.04)",marginBottom:18,flexWrap:"wrap"}},
+    props.items.map(function(it){var on=props.active===it[0];return React.createElement("button",{key:it[0],onClick:function(){props.onChange(it[0]);},style:{padding:"9px 20px",border:"none",borderRadius:10,background:on?props.net.color:"transparent",color:on?"#fff":"#5b6573",fontWeight:on?600:500,fontSize:14,cursor:"pointer",boxShadow:on?"0 4px 12px rgba(24,95,165,.25)":"none",transition:"all .15s"}},it[1]);}));
+}
+
+function LeadKpis(props){
+  var myLeads=props.leads;
+  var k=useMemo(function(){
+    var now=new Date(),m0=new Date(now.getFullYear(),now.getMonth(),1),m1=new Date(now.getFullYear(),now.getMonth()-1,1),d30=new Date(now.getTime()-30*864e5),d60=new Date(now.getTime()-60*864e5);
+    var cM=0,cP=0,c30=0,c60=0,nw=0,sg=0,valid=myLeads.filter(function(l){return l.status!=="spam";});
+    valid.forEach(function(l){var d=parseLeadDate(l.importedAt);if(l.status==="nouveau")nw++;if(l.status==="signe")sg++;if(!d)return;if(d>=m0)cM++;else if(d>=m1)cP++;if(d>=d30)c30++;else if(d>=d60)c60++;});
+    function dl(a,b){return b>0?Math.round((a-b)/b*100):null;}
+    return{m:cM,mD:dl(cM,cP),d:c30,dD:dl(c30,c60),nw:nw,rate:valid.length?Math.round(sg/valid.length*100):0};
+  },[myLeads]);
+  function chip(d){return d!==null&&React.createElement("span",{style:{fontSize:11.5,fontWeight:600,padding:"2px 8px",borderRadius:8,background:d>=0?"#E3F6E8":"#FDECEC",color:d>=0?"#1E7B3A":"#B03A3A"}},(d>=0?"↑ +":"↓ ")+d+" %");}
+  function card(icon,bg,label,val,d){return React.createElement("div",{key:label,style:{background:"#fff",borderRadius:16,boxShadow:"0 2px 12px rgba(20,40,80,.06)",border:"1px solid #eef1f6",padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flex:"1 1 200px",minWidth:190}},
+    React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}},icon),
+    React.createElement("div",null,React.createElement("div",{style:{fontSize:12.5,color:"#6b7684"}},label),React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},React.createElement("span",{style:{fontSize:24,fontWeight:700,color:"#12263f"}},val),d!==undefined&&chip(d))));}
+  return React.createElement("div",{style:{display:"flex",gap:14,flexWrap:"wrap",marginBottom:18}},card("👥","#E6F1FB","Leads du mois",k.m,k.mD),card("📅","#E3F6E8","Leads (30 jours)",k.d,k.dD),card("🔔","#FAEEDA","À traiter",k.nw),card("🎯","#EEEDFE","Taux de signature",k.rate+" %"));
+}
+
 function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
   return function(props){
     var leads=props.leads,setLeads=props.setLeads,companies=props.companies,onLogout=props.onLogout;
@@ -1613,15 +1652,12 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
     }
     async function saveLeadUpdate(id,status,note){await dbUpdate("leads","id=eq."+id,{status:status,note:note});setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});}
     if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center"}},"Chargement…");
-    return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
-      React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},React.createElement("img",{src:LOGO_SRC,alt:"Dofelink",style:{height:28,marginRight:8}}),React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:15}},companyName+" — Admin"),React.createElement("span",{style:{fontSize:12,background:net.light,color:net.color,padding:"2px 8px",borderRadius:10}},NETWORKS[network].label)),
-        React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")
-      ),
-      React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"0 20px",display:"flex"}},
-        [["leads","📋 Leads"],["ca","💶 CA Facturé"],["commerciaux","👥 Commerciaux"]].map(function(item){var active=tab===item[0];return React.createElement("button",{key:item[0],onClick:function(){setTab(item[0]);},style:{padding:"12px 20px",border:"none",borderBottom:"2px solid "+(active?net.color:"transparent"),background:"transparent",color:active?net.color:"var(--color-text-secondary)",fontWeight:active?500:400,fontSize:13,cursor:"pointer"}},item[1]);})
-      ),
-      React.createElement("div",{style:{padding:16}},
+    return React.createElement("div",{style:{minHeight:"100vh",background:"linear-gradient(180deg,#eef3fa 0%,#f7f9fc 40%)",fontSize:14,color:"#1a2433"}},
+      React.createElement("style",null,DOFE_CSS+ADMIN_THEME_CSS),
+      React.createElement(SubHeader,{net:net,title:companyName+" — Admin",onLogout:onLogout}),
+      React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500,margin:"0 auto"}},
+        tab==="leads"&&React.createElement(LeadKpis,{leads:myLeads}),
+        React.createElement(Pills,{items:[["leads","👥 Leads"],["ca","💶 CA Facturé"],["commerciaux","🧑‍💼 Commerciaux"]],active:tab,onChange:setTab,net:net}),
         msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},msg.text,React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")),
         tab==="leads"&&React.createElement("div",null,
           selectedCount>0&&React.createElement("div",{style:{background:net.light,border:"1px solid "+net.color,borderRadius:10,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
@@ -1686,12 +1722,11 @@ function makeSubCommercialView(companyId,companyName,network,dbTable){
     var counts=useMemo(function(){var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};STATUSES.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});return r;},[myLeads]);
     var paginated=shown.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
     async function saveLeadUpdate(id,status,note){await dbUpdate("leads","id=eq."+id,{status:status,note:note});setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});}
-    return React.createElement("div",{style:{minHeight:"100vh",background:"var(--color-background-tertiary)",fontSize:14}},
-      React.createElement("div",{style:{background:"var(--color-background-primary)",borderBottom:"1px solid var(--color-border-tertiary)",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},React.createElement("img",{src:LOGO_SRC,alt:"Dofelink",style:{height:28,marginRight:8}}),React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:15}},commercial.nom),React.createElement("span",{style:{fontSize:12,background:net.light,color:net.color,padding:"2px 8px",borderRadius:10}},companyName)),
-        React.createElement("button",{onClick:onLogout,style:{padding:"6px 12px",borderRadius:8,border:"1px solid var(--color-border-secondary)",background:"transparent",cursor:"pointer",fontSize:12,color:"var(--color-text-secondary)"}},"Déconnexion")
-      ),
-      React.createElement("div",{style:{padding:16}},
+    return React.createElement("div",{style:{minHeight:"100vh",background:"linear-gradient(180deg,#eef3fa 0%,#f7f9fc 40%)",fontSize:14,color:"#1a2433"}},
+      React.createElement("style",null,DOFE_CSS+ADMIN_THEME_CSS),
+      React.createElement(SubHeader,{net:net,title:commercial.nom+" · "+companyName,onLogout:onLogout}),
+      React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500,margin:"0 auto"}},
+        React.createElement(LeadKpis,{leads:myLeads}),
         React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
           React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
           STATUSES.filter(function(s){return s.key!=="spam";}).map(function(s){return React.createElement("button",{key:s.key,onClick:function(){setFilter(s.key);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter===s.key?s.color:"var(--color-border-secondary)"),background:filter===s.key?s.bg:"transparent",color:filter===s.key?s.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter===s.key?500:400}},s.label+" ("+(counts[s.key]||0)+")");})
