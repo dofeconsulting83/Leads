@@ -275,9 +275,16 @@ function parseExcelStatsFile(buffer,companies){
         if(!ws){reject(new Error("Onglet 'LEADS-ENTRANTS_2026' introuvable"));return;}
         var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
         var result={};
+        function lab(v){return String(v==null?"":v).replace(/\s+/g," ").trim().toLowerCase();}
+        // Détection par libellés (robuste si des lignes sont ajoutées dans le fichier)
+        var blockStart={};
+        rows.forEach(function(r,i){var nx=rows[i+1];if(r&&nx&&lab(nx[0]).indexOf("source de contact")===0&&lab(r[0])&&blockStart[lab(r[0])]===undefined)blockStart[lab(r[0])]=i;});
+        var netStart={};
+        rows.forEach(function(r,i){var m=lab(r&&r[0]).match(/^total devis site (atm|mh)\b/);if(m&&netStart[m[1]]===undefined)netStart[m[1]]=i;});
         // Parse société data
         companies.forEach(function(co){
-          var startRow=STATS_COMPANY_ROWS[co.id];
+          var startRow=blockStart[lab(co.name)];
+          if(startRow===undefined)startRow=STATS_COMPANY_ROWS[co.id];
           if(startRow===undefined)return;
           var coData={};
           STATS_SOURCES.forEach(function(src,si){
@@ -294,7 +301,8 @@ function parseExcelStatsFile(buffer,companies){
         });
         // Parse totaux réseau
         Object.keys(STATS_NETWORK_ROWS).forEach(function(network){
-          var startRow=STATS_NETWORK_ROWS[network];
+          var startRow=netStart[network==="renovation"?"atm":"mh"];
+          if(startRow===undefined)startRow=STATS_NETWORK_ROWS[network];
           var netData={};
           STATS_SOURCES.forEach(function(src,si){
             var srcRow=rows[startRow+si];
@@ -1657,7 +1665,7 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
       React.createElement(SubHeader,{net:net,title:companyName+" — Admin",onLogout:onLogout}),
       React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500,margin:"0 auto"}},
         tab==="leads"&&React.createElement(LeadKpis,{leads:myLeads}),
-        React.createElement(Pills,{items:[["leads","👥 Leads"],["ca","💶 CA Facturé"],["commerciaux","🧑‍💼 Commerciaux"]],active:tab,onChange:setTab,net:net}),
+        React.createElement(Pills,{items:[["leads","👥 Leads"],["ca","💶 CA Facturé"],["stats","📊 Source de contacts"],["commerciaux","🧑‍💼 Commerciaux"]],active:tab,onChange:setTab,net:net}),
         msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},msg.text,React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")),
         tab==="leads"&&React.createElement("div",null,
           selectedCount>0&&React.createElement("div",{style:{background:net.light,border:"1px solid "+net.color,borderRadius:10,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
@@ -1685,6 +1693,7 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
           !groupByDept&&React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color})
         ),
         React.createElement("div",{style:{display:tab==="ca"?"block":"none"}},React.createElement(CAView,{company:{id:companyId,name:companyName,network:network},companies:companies||INIT_COMPANIES})),
+        tab==="stats"&&React.createElement(LeadsStatsView,{company:{id:companyId,name:companyName,network:network},net:net}),
         tab==="commerciaux"&&React.createElement("div",null,
           React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:16}},
             React.createElement("div",{style:{fontWeight:500,marginBottom:14}},"Créer un commercial"),
