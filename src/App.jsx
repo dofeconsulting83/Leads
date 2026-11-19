@@ -477,7 +477,7 @@ function LeadsStatsView(props){
   var hasData=currentData&&currentData.length>0;
 
   var isNet=viewMode==="reseau",accent=isNet?"#0d2c4d":net.color,accentLight=isNet?"#E8EEF6":net.light;
-  return React.createElement("div",{style:{padding:"0 0 16px"}},
+  return React.createElement("div",{style:{padding:0}},
     React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
         React.createElement("div",{style:{fontWeight:700,fontSize:16,color:"#12263f"}},"📊 Contacts entrants"),
@@ -682,7 +682,7 @@ function CAView(props){
   if(commerciaux===null)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"var(--color-text-secondary)"}},"Chargement…");
   if(loadError)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"#A32D2D",fontSize:13}},loadError);
 
-  return React.createElement("div",{style:{padding:16}},
+  return React.createElement("div",{style:{padding:0}},
     React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:20}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}},
         React.createElement("div",{style:{fontWeight:500,fontSize:15}},"📈 CA Global Réseau"),
@@ -1163,7 +1163,7 @@ function CompanyView(props){
           React.createElement("button",{onClick:function(){exportCSV(myLeads,company.name);},style:ghost2},"⬇ Exporter CSV"),
           React.createElement("button",{onClick:onLogout,style:ghost2},"Déconnexion"),
           React.createElement("div",{title:company.name,style:{width:38,height:38,borderRadius:"50%",background:net.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}},initials))),
-      React.createElement("div",{className:"dl-admin",style:{maxWidth:1400,margin:"0 auto",padding:"22px 24px 40px"}},
+      React.createElement("div",{className:"dl-admin",style:{maxWidth:1500,margin:"0 auto",padding:"22px 24px 40px"}},
       activeTab==="dashboard"&&React.createElement(CompanyDashboard,{company:company,net:net,myLeads:myLeads,go:setActiveTab,onOpen:function(l){setPanel(l);}}),
       React.createElement("div",{style:{display:activeTab==="ca"?"block":"none"}},React.createElement(CAView,{company:company,companies:companies})),
       React.createElement("div",{style:{display:activeTab==="stats"?"block":"none"}},React.createElement(LeadsStatsView,{company:company,net:net})),
@@ -1502,7 +1502,7 @@ function AdminView(props){
       React.createElement("div",{style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(8px)",borderBottom:"1px solid #e9edf3",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:50}},
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},React.createElement("button",{className:"dl-burger",onClick:function(){setNavOpen(true);},style:{border:"1px solid #e3e8ef",background:"#fff",borderRadius:9,padding:"6px 11px",fontSize:16,cursor:"pointer"}},"☰"),React.createElement("div",{style:{fontSize:18,fontWeight:700,color:"#12263f"}},tab==="dashboard"?"Administration":curTab[2])),
         React.createElement("button",{onClick:onLogout,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500}},"Déconnexion")),
-      React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500}},
+      React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500,margin:"0 auto"}},
       tab!=="dashboard"&&TAB_DESC[tab]&&React.createElement("div",{style:{fontSize:14,color:"#6b7684",marginBottom:18}},TAB_DESC[tab]),
       msg&&React.createElement("div",{style:{padding:"12px 16px",borderRadius:12,background:msg.type==="ok"?"#E8F6EC":"#FDECEC",color:msg.type==="ok"?"#1E6B35":"#9B2C2C",marginBottom:16,fontSize:13.5,display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid "+(msg.type==="ok"?"#CDEBD6":"#F6CFCF")}},React.createElement("span",null,(msg.type==="ok"?"✅ ":"⚠️ ")+msg.text),React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit",fontSize:15}},"✕")),
 
