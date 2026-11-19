@@ -1269,14 +1269,16 @@ function AdminDashboard(props){
   var st=useMemo(function(){
     var now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate()-days+1),prevStart=new Date(start.getTime()-days*864e5);
     var counts=[],labels=[];for(var i=0;i<days;i++){counts.push(0);var dd=new Date(start.getTime()+i*864e5);labels.push(dd.getDate()+"/"+(dd.getMonth()+1));}
+    var impCur=0,impPrev=0;
+    importGroups.forEach(function(g){var m=(g.id||"").match(/\d{12,}/);if(!m)return;var t=parseInt(m[0],10);if(t>=start.getTime())impCur++;else if(t>=prevStart.getTime())impPrev++;});
     var cur=0,prev=0,byCo={};
     leads.forEach(function(l){var d=parseLeadDate(l.importedAt);if(!d)return;if(d>=start){var idx=Math.floor((new Date(d.getFullYear(),d.getMonth(),d.getDate())-start)/864e5);if(idx>=0&&idx<days){counts[idx]++;cur++;byCo[l.companyId]=(byCo[l.companyId]||0)+1;}}else if(d>=prevStart)prev++;});
     var rows=Object.keys(byCo).map(function(id){var c=companies.find(function(x){return x.id===id;});return{name:c?c.name:id,value:byCo[id]};}).sort(function(a,b){return b.value-a.value;});
     var pal=["#185FA5","#12A5A0","#3B9B3B","#7B5BD6","#E8A33D","#C8CED6"];
     var top=rows.slice(0,5),rest=rows.slice(5).reduce(function(a,r){return a+r.value;},0);
     var items=top.map(function(r,i){return Object.assign({},r,{color:pal[i]});});if(rest>0)items.push({name:"Autres",value:rest,color:pal[5]});
-    return{counts:counts,labels:labels,cur:cur,delta:prev>0?Math.round((cur-prev)/prev*100):null,items:items};
-  },[leads,companies,days]);
+    return{imp:impCur,impD:impPrev>0?Math.round((impCur-impPrev)/impPrev*100):null,counts:counts,labels:labels,cur:cur,delta:prev>0?Math.round((cur-prev)/prev*100):null,items:items};
+  },[leads,companies,importGroups,days]);
   var contacts=useMemo(function(){return leads.filter(function(l){return l.source==="Contacts";}).length;},[leads]);
   var card={background:"#fff",borderRadius:16,boxShadow:"0 2px 12px rgba(20,40,80,.06)",border:"1px solid #eef1f6"};
   function kpi(icon,bg,label,value,d,target){
@@ -1292,7 +1294,7 @@ function AdminDashboard(props){
       React.createElement("div",null,React.createElement("div",{style:{fontSize:26,fontWeight:700,color:"#12263f"}},"Bonjour Guillaume 👋"),React.createElement("div",{style:{fontSize:14,color:"#6b7684"}},"Voici la vue d'ensemble de votre activité.")),
       React.createElement("select",{value:days,onChange:function(e){setDays(parseInt(e.target.value,10));},style:Object.assign({},inp,{padding:"10px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",fontWeight:500})},[[7,"7 derniers jours"],[30,"30 derniers jours"],[90,"90 derniers jours"]].map(function(o){return React.createElement("option",{key:o[0],value:o[0]},o[1]);}))),
     React.createElement("div",{style:{display:"flex",gap:14,flexWrap:"wrap",marginBottom:18}},
-      kpi("⬆️","#E6F1FB","Imports",importGroups.length,null,"imports"),
+      kpi("⬆️","#E6F1FB","Imports ("+days+" j)",st.imp,st.impD,"imports"),
       kpi("👥","#E3F6E8","Leads ("+days+" j)",st.cur,st.delta,"overview"),
       kpi("🎯","#EEEDFE","Contacts",contacts,null,"stats"),
       kpi("🏢","#FAEEDA","Sociétés",companies.length,null,"companies")),
@@ -1350,7 +1352,7 @@ function AdminView(props){
   var allStats=useMemo(function(){return{total:leads.length,byStatus:STATUSES.map(function(s){return Object.assign({},s,{count:leads.filter(function(l){return l.status===s.key;}).length});})};},[leads]);
   var tabs=[["dashboard","🏠","Tableau de bord"],["import","⬆️","Importer CSV"],["imports","🗂️","Historique imports"],["overview","🧭","Vue d'ensemble"],["ca","💶","CA Facturé"],["stats","📊","Source de contacts"],["connexions","🔐","Connexions"],["companies","🏢","Sociétés"]];
   var curTab=tabs.find(function(t){return t[0]===tab;})||tabs[0];
-  var sideCss=".dl-side{position:sticky;top:0;height:100vh;width:240px;flex-shrink:0;background:linear-gradient(180deg,#0d2c4d 0%,#0a2038 100%);display:flex;flex-direction:column;padding:18px 14px;box-sizing:border-box;z-index:60}.dl-nav{display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;border:none;border-radius:11px;background:transparent;color:#c5d3e6;font-size:14px;cursor:pointer;text-align:left;margin-bottom:3px;transition:all .15s}.dl-nav:hover{background:rgba(255,255,255,.08);color:#fff}.dl-nav.on{background:#185FA5;color:#fff;font-weight:600;box-shadow:0 6px 16px rgba(0,0,0,.25)}.dl-burger{display:none}@media(max-width:860px){.dl-side{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .25s}.dl-side.open{transform:none}.dl-burger{display:inline-flex}.dl-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:55}}";
+  var sideCss=".dl-side{position:sticky;top:0;height:100vh;width:240px;flex-shrink:0;background:linear-gradient(180deg,#0d2c4d 0%,#0a2038 100%);display:flex;flex-direction:column;padding:18px 14px;box-sizing:border-box;z-index:60}.dl-nav{display:flex;align-items:center;gap:12px;width:100%;padding:11px 14px;border:none;border-radius:11px;background:transparent;color:#c5d3e6;font-size:14px;cursor:pointer;text-align:left;margin-bottom:3px;transition:all .15s}.dl-nav:hover{background:rgba(255,255,255,.08);color:#fff}.dl-nav.on{background:#185FA5;color:#fff;font-weight:600;box-shadow:0 6px 16px rgba(0,0,0,.25)}.dl-admin{--color-background-primary:#fff;--color-background-secondary:#f6f8fb;--color-background-tertiary:#eef3fa;--color-border-tertiary:#e9edf3;--color-border-secondary:#d9e0ea;--color-text-secondary:#5b6573;--color-text-tertiary:#8a95a5;--color-text-primary:#1a2433}.dl-admin div[style*='border-radius: 10px'][style*='solid'],.dl-admin div[style*='border-radius: 12px'][style*='solid'],.dl-admin div[style*='border-radius: 14px'][style*='solid']{border-radius:16px!important;box-shadow:0 2px 12px rgba(20,40,80,.06);border-color:#eef1f6!important}.dl-admin table{border-collapse:collapse}.dl-admin th{text-transform:uppercase;letter-spacing:.4px;font-size:11px!important;font-weight:600!important;color:#6b7684!important;background:#f6f8fb!important}.dl-admin tbody tr{transition:background .12s}.dl-admin tbody tr:hover{background:#f6f9fd!important}.dl-admin button[style*='border-radius: 8px'],.dl-admin button[style*='border-radius: 7px'],.dl-admin button[style*='border-radius: 9px']{border-radius:10px!important}.dl-admin input:not([type=checkbox]):not([type=file]),.dl-admin select,.dl-admin textarea{border-radius:10px!important;border-color:#d9e0ea!important;background-color:#fff}.dl-admin input:focus,.dl-admin select:focus,.dl-admin textarea:focus{outline:none;border-color:#185FA5!important;box-shadow:0 0 0 3px rgba(24,95,165,.15)}.dl-admin h2,.dl-admin h3{color:#12263f}.dl-burger{display:none}@media(max-width:860px){.dl-side{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .25s}.dl-side.open{transform:none}.dl-burger{display:inline-flex}.dl-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:55}}";
   return React.createElement("div",{style:{minHeight:"100vh",display:"flex",background:"linear-gradient(180deg,#eef3fa 0%,#f7f9fc 40%)",fontSize:14,color:"#1a2433"}},
     React.createElement("style",null,DOFE_CSS+sideCss),
     navOpen&&React.createElement("div",{className:"dl-ov",onClick:function(){setNavOpen(false);}}),
@@ -1362,7 +1364,7 @@ function AdminView(props){
       React.createElement("div",{style:{background:"rgba(255,255,255,.85)",backdropFilter:"blur(8px)",borderBottom:"1px solid #e9edf3",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:50}},
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},React.createElement("button",{className:"dl-burger",onClick:function(){setNavOpen(true);},style:{border:"1px solid #e3e8ef",background:"#fff",borderRadius:9,padding:"6px 11px",fontSize:16,cursor:"pointer"}},"☰"),React.createElement("div",{style:{fontSize:18,fontWeight:700,color:"#12263f"}},tab==="dashboard"?"Administration":curTab[2])),
         React.createElement("button",{onClick:onLogout,style:{padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500}},"Déconnexion")),
-      React.createElement("div",{style:{padding:"22px 24px 40px",maxWidth:1500}},
+      React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500}},
       msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:8,background:msg.type==="ok"?"#EAF3DE":"#FCEBEB",color:msg.type==="ok"?"#27500A":"#791F1F",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},msg.text,React.createElement("button",{onClick:function(){setMsg(null);},style:{background:"none",border:"none",cursor:"pointer",color:"inherit"}},"✕")),
 
       tab==="dashboard"&&React.createElement(AdminDashboard,{leads:leads,companies:companies,importGroups:importGroups,go:setTab}),
