@@ -1444,6 +1444,63 @@ function KpiRow(props){
 
 var TAB_DESC={import:"Importez des leads par fichier CSV, synchronisez Google Sheets ou saisissez-les à la main.",imports:"Retrouvez chaque import effectué et gérez-le.",overview:"Répartition des leads par statut et par société, mois par mois.",ca:"Suivi du chiffre d'affaires facturé par société.",stats:"Statistiques de leads par canal d'acquisition.",connexions:"Qui s'est connecté, quand, et à quelle fréquence.",companies:"Gérez les sociétés et leurs mots de passe."};
 
+function impTime(g){var m=(g.id||"").match(/\d{12,}/);if(m)return parseInt(m[0],10);var mx=0;g.leads.forEach(function(l){var d=new Date(l.importedAt||0).getTime();if(d>mx)mx=d;});return mx;}
+function ImportsHistory(props){
+  var groups=props.importGroups,companies=props.companies,onDelete=props.onDelete;
+  var [coF,setCoF]=useState("");
+  var [mode,setMode]=useState("co");
+  var [open,setOpen]=useState({});
+  var rows=useMemo(function(){return groups.map(function(g){var srcs={};g.leads.forEach(function(l){if(l.source)srcs[l.source]=(srcs[l.source]||0)+1;});return {g:g,t:impTime(g),srcs:srcs};}).filter(function(r){return !coF||r.g.companyId===coF;}).sort(function(a,b){return b.t-a.t;});},[groups,coF]);
+  var byCo=useMemo(function(){var m={};rows.forEach(function(r){var k=r.g.companyId;if(!m[k])m[k]={id:k,rows:[],total:0,last:0};m[k].rows.push(r);m[k].total+=r.g.leads.length;if(r.t>m[k].last)m[k].last=r.t;});return Object.values(m).sort(function(a,b){return b.last-a.last;});},[rows]);
+  var card={background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",overflow:"hidden",marginBottom:16};
+  function fmt(t){if(!t)return "—";var d=new Date(t);return d.toLocaleDateString("fr-FR")+" · "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}
+  function row(r,showCo){
+    var g=r.g,co=companies.find(function(c){return c.id===g.companyId;}),net=co?NETWORKS[co.network]:NETWORKS.renovation;
+    var isOpen=!!open[g.id];
+    return React.createElement(React.Fragment,{key:g.id},
+      React.createElement("tr",{style:{borderTop:"1px solid #eef1f6"}},
+        React.createElement("td",{style:{padding:"12px 16px",whiteSpace:"nowrap",fontSize:13,color:"#1a2433"}},fmt(r.t)),
+        showCo&&React.createElement("td",{style:{padding:"12px 10px"}},React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:7,fontWeight:600,fontSize:13}},React.createElement("span",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),co?co.name:"Société inconnue")),
+        React.createElement("td",{style:{padding:"12px 10px"}},Object.keys(r.srcs).map(function(s){return React.createElement("span",{key:s,style:{marginRight:5}},React.createElement(SourceBadge,{source:s}));})),
+        React.createElement("td",{style:{padding:"12px 10px",fontSize:12,color:"#6b7684",maxWidth:260}},g.label),
+        React.createElement("td",{style:{padding:"12px 10px",fontWeight:700,fontSize:14,textAlign:"center"}},g.leads.length),
+        React.createElement("td",{style:{padding:"12px 10px"}},React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},STATUSES.filter(function(s){return g.leads.some(function(l){return l.status===s.key;});}).map(function(s){return React.createElement("span",{key:s.key,style:{fontSize:11,padding:"2px 8px",borderRadius:8,background:s.bg,color:s.color,whiteSpace:"nowrap"}},g.leads.filter(function(l){return l.status===s.key;}).length+" "+s.label);}))),
+        React.createElement("td",{style:{padding:"12px 16px",whiteSpace:"nowrap",textAlign:"right"}},
+          React.createElement("button",{onClick:function(){setOpen(function(o){var n=Object.assign({},o);n[g.id]=!n[g.id];return n;});},style:{padding:"6px 12px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:12,marginRight:6}},isOpen?"Masquer":"Détail"),
+          React.createElement("button",{onClick:function(){onDelete(g.id,g.leads.length);},style:{padding:"6px 12px",borderRadius:10,border:"1px solid #F7C1C1",background:"#fff",color:"#A32D2D",fontSize:12,cursor:"pointer",fontWeight:500}},"🗑"))),
+      isOpen&&React.createElement("tr",{style:{background:"#f8fafc"}},React.createElement("td",{colSpan:showCo?7:6,style:{padding:"10px 16px 14px"}},
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:6}},g.leads.slice(0,60).map(function(l){return React.createElement("div",{key:l.id,style:{fontSize:12,background:"#fff",border:"1px solid #eef1f6",borderRadius:8,padding:"6px 10px"}},React.createElement("b",null,(l.firstName+" "+l.lastName).trim()||"—"),React.createElement("div",{style:{color:"#6b7684"}},(l.phone||l.email||"—")+(fmtVille(l)&&fmtVille(l)!=="—"?" · "+fmtVille(l):"")));})),
+        g.leads.length>60&&React.createElement("div",{style:{fontSize:12,color:"#6b7684",marginTop:6}},"… et "+(g.leads.length-60)+" autres")))
+    );
+  }
+  function table(rs,showCo){
+    return React.createElement("div",{style:{overflowX:"auto"}},React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
+      React.createElement("thead",null,React.createElement("tr",null,["Date et heure"].concat(showCo?["Société"]:[]).concat(["Origine","Fichier / source","Leads","Statuts",""]).map(function(h,i){return React.createElement("th",{key:i,style:{padding:"10px 16px",textAlign:i===(showCo?4:3)?"center":"left",fontSize:11}},h);}))),
+      React.createElement("tbody",null,rs.map(function(r){return row(r,showCo);}))));
+  }
+  var totalLeads=rows.reduce(function(a,r){return a+r.g.leads.length;},0);
+  var sel={padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",fontSize:13};
+  var pill=function(on){return {padding:"7px 14px",borderRadius:999,border:"1px solid "+(on?"#185FA5":"#e3e8ef"),background:on?"#E6F1FB":"#fff",color:on?"#185FA5":"#4a5565",fontWeight:on?600:500,fontSize:13,cursor:"pointer"};};
+  return React.createElement("div",null,
+    React.createElement(KpiRow,{items:[{icon:"🗂️",bg:"#E6F1FB",label:"Imports",value:rows.length},{icon:"👥",bg:"#E3F6E8",label:"Leads importés",value:totalLeads},{icon:"🏢",bg:"#FAEEDA",label:"Sociétés concernées",value:byCo.length}]}),
+    React.createElement("div",{style:Object.assign({},card,{padding:14,overflow:"visible",display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"})},
+      React.createElement("select",{value:coF,onChange:function(e){setCoF(e.target.value);},style:sel},React.createElement("option",{value:""},"Toutes les sociétés"),companies.slice().sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(c){return React.createElement("option",{key:c.id,value:c.id},c.name);})),
+      React.createElement("button",{onClick:function(){setMode("co");},style:pill(mode==="co")},"Par société"),
+      React.createElement("button",{onClick:function(){setMode("date");},style:pill(mode==="date")},"Chronologique"),
+      React.createElement("span",{style:{fontSize:12,color:"#6b7684"}},"Du plus récent au plus ancien")),
+    rows.length===0&&React.createElement("div",{style:Object.assign({},card,{padding:40,textAlign:"center",color:"#6b7684"})},"Aucun import."),
+    mode==="date"?(rows.length>0&&React.createElement("div",{style:card},table(rows,true)))
+    :byCo.map(function(c){var co=companies.find(function(x){return x.id===c.id;}),net=co?NETWORKS[co.network]:NETWORKS.renovation;
+      return React.createElement("div",{key:c.id,style:card},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",flexWrap:"wrap"}},
+          React.createElement("span",{style:{width:10,height:10,borderRadius:"50%",background:net.color}}),
+          React.createElement("span",{style:{fontWeight:700,fontSize:15,color:"#12263f"}},co?co.name:"Société inconnue"),
+          React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"2px 9px",borderRadius:9,fontWeight:600}},c.rows.length+" import"+(c.rows.length>1?"s":"")+" · "+c.total+" leads"),
+          React.createElement("span",{style:{marginLeft:"auto",fontSize:12,color:"#6b7684"}},"Dernier : "+fmt(c.last))),
+        table(c.rows,false));})
+  );
+}
+
 function AdminView(props){
   var leads=props.leads,setLeads=props.setLeads,companies=props.companies,setCompanies=props.setCompanies,onLogout=props.onLogout;
   var fileRef=useRef();
@@ -1547,13 +1604,7 @@ function AdminView(props){
         )
       ),
 
-      tab==="imports"&&React.createElement("div",null,
-        React.createElement(KpiRow,{items:[{icon:"🗂️",bg:"#E6F1FB",label:"Imports",value:importGroups.length},{icon:"👥",bg:"#E3F6E8",label:"Leads importés",value:importGroups.reduce(function(a,g){return a+g.leads.length;},0)},{icon:"🏢",bg:"#FAEEDA",label:"Sociétés concernées",value:Object.keys(importGroups.reduce(function(a,g){a[g.companyId]=1;return a;},{})).length}]}),
-        importGroups.length===0&&React.createElement("div",{style:{padding:32,textAlign:"center",color:"var(--color-text-secondary)",background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)"}},"Aucun import."),
-        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
-          importGroups.map(function(g){var co=companies.find(function(c){return c.id===g.companyId;}),net=co?NETWORKS[co.network]:NETWORKS.renovation;return React.createElement("div",{key:g.id,style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:"12px 16px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}},React.createElement("div",null,React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:4}},React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500}},co?co.name:"Société inconnue"),React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},g.leads.length+" lead"+(g.leads.length>1?"s":""))),React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",marginBottom:6}},g.label),React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},STATUSES.filter(function(s){return g.leads.some(function(l){return l.status===s.key;});}).map(function(s){return React.createElement("span",{key:s.key,style:{fontSize:11,padding:"1px 8px",borderRadius:8,background:s.bg,color:s.color}},g.leads.filter(function(l){return l.status===s.key;}).length+" "+s.label);}))),React.createElement("button",{onClick:function(){deleteImport(g.id,g.leads.length);},style:{padding:"6px 14px",borderRadius:8,border:"1px solid #F7C1C1",background:"transparent",color:"#A32D2D",fontSize:12,cursor:"pointer",fontWeight:500}},"🗑 Supprimer")));})
-        )
-      ),
+      tab==="imports"&&React.createElement(ImportsHistory,{importGroups:importGroups,companies:companies,onDelete:deleteImport}),
 
       tab==="overview"&&React.createElement("div",null,
         React.createElement("div",{style:{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}},
