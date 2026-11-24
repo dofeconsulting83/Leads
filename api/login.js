@@ -1,4 +1,4 @@
-import { SB_KEY, JWT_SECRET, sbRest, svcHeaders, signJwt, uuidFor, verifyPassword, hashPassword } from "../../lib/dofelinkAuth";
+import { SB_KEY, JWT_SECRET, sbRest, svcHeaders, signJwt, uuidFor, verifyPassword, hashPassword } from "../lib/dofelinkAuth.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ORDER = { admin: 0, subadmin: 1, commercial: 2, company: 3 };   // même priorité que l'ancienne connexion
@@ -6,7 +6,7 @@ const TTL = 12 * 3600;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  if (!SB_KEY || !JWT_SECRET) return res.status(500).json({ error: "Configuration serveur incomplète." });
+  if (!SB_KEY || !JWT_SECRET) { console.error("[login] variable manquante: SERVICE_ROLE=" + !!SB_KEY + " JWT_SECRET=" + !!JWT_SECRET); return res.status(500).json({ error: "Configuration serveur incomplète." }); }
   const login = String((req.body && req.body.login) || "").trim().toLowerCase();
   const password = String((req.body && req.body.password) || "");
   if (!login || !password || login.length > 80 || password.length > 200) return res.status(400).json({ error: "Identifiants incorrects." });
@@ -36,6 +36,7 @@ export default async function handler(req, res) {
     await sleep(500);
     return res.status(401).json({ error: "Identifiants incorrects." });
   } catch (e) {
+    console.error("[login] ERREUR:", e && e.message ? String(e.message).slice(0, 300) : e);
     return res.status(500).json({ error: "Erreur serveur." });
   }
 }
