@@ -2,7 +2,27 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 
 const SUPABASE_URL  = "https://okbtkvjexxhjmbdmorgg.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rYnRrdmpleHhoam1iZG1vcmdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1Mjk3MzcsImV4cCI6MjA5MDEwNTczN30.vCPz-5Kj3F-NdFnw27T06qU4uhuYkGSPxUeC8S9o8dQ";
-const HEADERS = { "apikey": SUPABASE_ANON, "Authorization": "Bearer " + SUPABASE_ANON, "Content-Type": "application/json" };
+/* ===== AUTH (Supabase Auth via /api/login) : le jeton de l'utilisateur remplace la clé publique ===== */
+var AUTH = { access: null, refresh: null, exp: 0 };
+(function restoreAuth(){ try { var a = JSON.parse(sessionStorage.getItem("dl_auth") || "null"); if (a && a.access) AUTH = a; } catch(e) {} })();
+function setAuth(a) { AUTH = a || { access: null, refresh: null, exp: 0 }; try { if (a) sessionStorage.setItem("dl_auth", JSON.stringify(a)); else sessionStorage.removeItem("dl_auth"); } catch(e) {} }
+async function refreshAuth() {
+  if (!AUTH.refresh) return false;
+  try {
+    var r = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", { method: "POST", headers: { "apikey": SUPABASE_ANON, "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: AUTH.refresh }) });
+    if (!r.ok) return false;
+    var s = await r.json();
+    setAuth({ access: s.access_token, refresh: s.refresh_token, exp: Date.now() + (s.expires_in - 60) * 1000 });
+    return true;
+  } catch(e) { return false; }
+}
+var HEADERS = { "apikey": SUPABASE_ANON, get "Authorization"() { return "Bearer " + (AUTH.access || SUPABASE_ANON); }, "Content-Type": "application/json" };
+async function apiPost(path, body) {
+  var r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (AUTH.access || "") }, body: JSON.stringify(body) });
+  var j = {}; try { j = await r.json(); } catch(e) {}
+  if (!r.ok) throw new Error(j.error || "Erreur serveur");
+  return j;
+}
 
 async function dbSelect(table, query) {
   var allRows = [], offset = 0, pageSize = 1000;
@@ -59,39 +79,34 @@ var CUSTOM_STATUSES = {};
 function getStatuses(companyId) { return STATUSES; }
 
 var INIT_COMPANIES = [
-  { id:"c2",  name:"13 ATM",  network:"renovation", login:"atm13",  password:"1234", email:"13atm@atriome.fr" },
-  { id:"c3",  name:"14 ATM",  network:"renovation", login:"atm14",  password:"1234", email:"14atm@atriome.fr" },
-  { id:"c4",  name:"35 ATM",  network:"renovation", login:"atm35",  password:"1234", email:"35atm@atriome.fr" },
-  { id:"c5",  name:"52 ATM",  network:"renovation", login:"atm52",  password:"atm52_societe", email:"52atm@atriome.fr" },
-  { id:"c6",  name:"56 ATM",  network:"renovation", login:"atm56",  password:"1234", email:"56atm@atriome.fr" },
-  { id:"c7",  name:"60 ATM",  network:"renovation", login:"atm60",  password:"1234", email:"60atm@atriome.fr" },
-  { id:"c8",  name:"69 ATM",  network:"renovation", login:"atm69",  password:"1234", email:"69atm@atriome.fr" },
-  { id:"c9",  name:"78 ATM",  network:"renovation", login:"atm78",  password:"1234", email:"78atm@atriome.fr" },
-  { id:"c10", name:"83 ATM",  network:"renovation", login:"atm83",  password:"1234", email:"83atm@atriome.fr" },
-  { id:"c11", name:"84 ATM",  network:"renovation", login:"atm84",  password:"1234", email:"84atm@atriome.fr" },
-  { id:"c12", name:"94 ATM",  network:"renovation", login:"atm94",  password:"1234", email:"94atm@atriome.fr" },
-  { id:"c13", name:"95 ATMR", network:"renovation", login:"atmr95", password:"1234", email:"sebastien.d@atriome.fr" },
-  { id:"c14", name:"30 MH",   network:"humidite",   login:"mh30",   password:"mh30_societe", email:"30mh@murhumide.fr" },
-  { id:"c15", name:"44 MH",   network:"humidite",   login:"mh44",   password:"1234", email:"demande@44mh.fr" },
-  { id:"c16", name:"56 MH",   network:"humidite",   login:"mh56",   password:"1234", email:"sas56mh@gmail.com" },
-  { id:"c17", name:"59 MH",   network:"humidite",   login:"mh59",   password:"1234", email:"prospect@murhumide.fr" },
-  { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   password:"1234", email:"" },
-  { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   password:"mh76_societe", email:"normandie@murhumide.fr" },
-  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   password:"mh83_societe", email:"cyril.blin@murhumide.fr" },
-  { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   password:"1234", email:"abder.limam@murhumide.fr" },
-  { id:"c22", name:"ATM BFC", network:"renovation", login:"atmbfc", password:"1234", email:"pf21@proxifeu.fr" },
+  { id:"c2",  name:"13 ATM",  network:"renovation", login:"atm13",  email:"13atm@atriome.fr" },
+  { id:"c3",  name:"14 ATM",  network:"renovation", login:"atm14",  email:"14atm@atriome.fr" },
+  { id:"c4",  name:"35 ATM",  network:"renovation", login:"atm35",  email:"35atm@atriome.fr" },
+  { id:"c5",  name:"52 ATM",  network:"renovation", login:"atm52",  email:"52atm@atriome.fr" },
+  { id:"c6",  name:"56 ATM",  network:"renovation", login:"atm56",  email:"56atm@atriome.fr" },
+  { id:"c7",  name:"60 ATM",  network:"renovation", login:"atm60",  email:"60atm@atriome.fr" },
+  { id:"c8",  name:"69 ATM",  network:"renovation", login:"atm69",  email:"69atm@atriome.fr" },
+  { id:"c9",  name:"78 ATM",  network:"renovation", login:"atm78",  email:"78atm@atriome.fr" },
+  { id:"c10", name:"83 ATM",  network:"renovation", login:"atm83",  email:"83atm@atriome.fr" },
+  { id:"c11", name:"84 ATM",  network:"renovation", login:"atm84",  email:"84atm@atriome.fr" },
+  { id:"c12", name:"94 ATM",  network:"renovation", login:"atm94",  email:"94atm@atriome.fr" },
+  { id:"c13", name:"95 ATMR", network:"renovation", login:"atmr95", email:"sebastien.d@atriome.fr" },
+  { id:"c14", name:"30 MH",   network:"humidite",   login:"mh30",   email:"30mh@murhumide.fr" },
+  { id:"c15", name:"44 MH",   network:"humidite",   login:"mh44",   email:"demande@44mh.fr" },
+  { id:"c16", name:"56 MH",   network:"humidite",   login:"mh56",   email:"sas56mh@gmail.com" },
+  { id:"c17", name:"59 MH",   network:"humidite",   login:"mh59",   email:"prospect@murhumide.fr" },
+  { id:"c18", name:"69 MH",   network:"humidite",   login:"mh69",   email:"" },
+  { id:"c19", name:"76 MH",   network:"humidite",   login:"mh76",   email:"normandie@murhumide.fr" },
+  { id:"c20", name:"83 MH",   network:"humidite",   login:"mh83",   email:"cyril.blin@murhumide.fr" },
+  { id:"c21", name:"91 MH",   network:"humidite",   login:"mh91",   email:"abder.limam@murhumide.fr" },
+  { id:"c22", name:"ATM BFC", network:"renovation", login:"atmbfc", email:"pf21@proxifeu.fr" },
 ];
-var ADMIN = { login: "admin", password: "admin123" };
-var MH76_ADMIN = { companyId: "c19", login: "mh76", password: "1234" };
-var MH30_ADMIN = { companyId: "c14", login: "mh30", password: "1234" };
-var ATM52_ADMIN = { companyId: "c5",  login: "atm52", password: "1234" };
-var MH83_ADMIN = { companyId: "c20", login: "mh83", password: "1234" };
 var PAGE_SIZE = 20;
 
 function rowToLead(r) { return { id:r.id, companyId:r.company_id, firstName:r.first_name, lastName:r.last_name, email:r.email, phone:r.phone, address:r.address, city:r.city, zip:r.zip, message:r.message, campaign:r.campaign, importedAt:r.imported_at, importId:r.import_id||null, importLabel:r.import_label||null, status:r.status||"nouveau", note:r.note||"", source:r.source||"" }; }
 function leadToRow(l) { return { id:l.id, company_id:l.companyId, first_name:l.firstName, last_name:l.lastName, email:l.email, phone:l.phone, address:l.address, city:l.city, zip:l.zip, message:l.message, campaign:l.campaign, imported_at:l.importedAt, import_id:l.importId||null, import_label:l.importLabel||null, status:l.status||"nouveau", note:l.note||"", source:l.source||"" }; }
-function rowToCompany(r) { return { id:r.id, name:r.name, network:r.network, login:r.login, password:r.password, email:r.email||"" }; }
-function companyToRow(c) { return { id:c.id, name:c.name, network:c.network, login:c.login, password:c.password, email:c.email||"" }; }
+function rowToCompany(r) { return { id:r.id, name:r.name, network:r.network, login:r.login, email:r.email||"" }; }
+function companyToRow(c) { return { id:c.id, name:c.name, network:c.network, login:c.login, email:c.email||"" }; }
 
 function parseLeadDate(str) {
   if (!str) return null;
@@ -861,56 +876,21 @@ function LoginScreen(props){
   var onLogin=props.onLogin,companies=props.companies,mh76Commerciaux=props.mh76Commerciaux||[],mh30Commerciaux=props.mh30Commerciaux||[],mh83Commerciaux=props.mh83Commerciaux||[],atm52Commerciaux=props.atm52Commerciaux||[];
   var [login,setLogin]=useState(""),[pass,setPass]=useState(""),[err,setErr]=useState(""),[checking,setChecking]=useState(false);
   async function submit(){
-    if(login===ADMIN.login&&pass===ADMIN.password){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"admin",company_name:"Administration",role:"admin",user_name:"Admin"}).catch(function(){});
-      onLogin({role:"admin"});return;
-    }
-    if(login===MH76_ADMIN.login&&pass===MH76_ADMIN.password){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c19",company_name:"76 MH",role:"subadmin",user_name:"Admin 76 MH"}).catch(function(){});
-      onLogin({role:"mh76admin",companyId:"c19"});return;
-    }
-    if(login===MH30_ADMIN.login&&pass===MH30_ADMIN.password){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c14",company_name:"30 MH",role:"subadmin",user_name:"Admin 30 MH"}).catch(function(){});
-      onLogin({role:"mh30admin",companyId:"c14"});return;
-    }
-    if(login===ATM52_ADMIN.login&&pass===ATM52_ADMIN.password){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c5",company_name:"52 ATM",role:"subadmin",user_name:"Admin 52 ATM"}).catch(function(){});
-      onLogin({role:"atm52admin",companyId:"c5"});return;
-    }
-    if(login===MH83_ADMIN.login&&pass===MH83_ADMIN.password){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c20",company_name:"83 MH",role:"subadmin",user_name:"Admin 83 MH"}).catch(function(){});
-      onLogin({role:"mh83admin",companyId:"c20"});return;
-    }
-    var comm=mh76Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
-    if(!comm){setChecking(true);try{var rows=await dbSelect("mh76_commerciaux","login=eq."+encodeURIComponent(login));comm=(rows||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
-    if(comm){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c19",company_name:"76 MH",role:"commercial",user_name:comm.nom}).catch(function(){});
-      notifyCommercialLogin("c19",comm.nom);
-      onLogin({role:"mh76commercial",commercialId:comm.id});return;
-    }
-    var comm30=mh30Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
-    if(!comm30){setChecking(true);try{var rows30=await dbSelect("mh30_commerciaux","login=eq."+encodeURIComponent(login));comm30=(rows30||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
-    if(comm30){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c14",company_name:"30 MH",role:"commercial",user_name:comm30.nom}).catch(function(){});
-      notifyCommercialLogin("c14",comm30.nom);
-      onLogin({role:"mh30commercial",commercialId:comm30.id});return;
-    }
-    var comm52=atm52Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
-    if(!comm52){setChecking(true);try{var rows52=await dbSelect("atm52_commerciaux","login=eq."+encodeURIComponent(login));comm52=(rows52||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
-    if(comm52){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c5",company_name:"52 ATM",role:"commercial",user_name:comm52.nom}).catch(function(){});
-      onLogin({role:"atm52commercial",commercialId:comm52.id});return;
-    }
-    var comm83=mh83Commerciaux.find(function(c){return c.login===login&&c.password===pass;});
-    if(!comm83){setChecking(true);try{var rows83=await dbSelect("mh83_commerciaux","login=eq."+encodeURIComponent(login));comm83=(rows83||[]).find(function(c){return c.password===pass;});}catch(e){}setChecking(false);}
-    if(comm83){
-      dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:"c20",company_name:"83 MH",role:"commercial",user_name:comm83.nom}).catch(function(){});
-      notifyCommercialLogin("c20",comm83.nom);
-      onLogin({role:"mh83commercial",commercialId:comm83.id});return;
-    }
-    var co=companies.find(function(c){return c.login===login&&c.password===pass;});
-    if(co){dbInsertOne("login_history",{id:"lh_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),company_id:co.id,company_name:co.name,role:"company",user_name:co.name}).catch(function(){});onLogin({role:"company",companyId:co.id});return;}
-    setErr("Identifiants incorrects.");
+    if(checking)return;
+    setErr("");setChecking(true);
+    try{
+      var r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({login:login,password:pass})});
+      var j={};try{j=await r.json();}catch(x){}
+      if(!r.ok){setErr(j.error||"Identifiants incorrects.");setChecking(false);return;}
+      setAuth({access:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in-60)*1000});
+      var p=j.profile||{},PFX={c19:"mh76",c14:"mh30",c20:"mh83",c5:"atm52"},pf=PFX[p.company_id];
+      if(p.role==="admin")onLogin({role:"admin"});
+      else if(p.role==="company")onLogin({role:"company",companyId:p.company_id});
+      else if(p.role==="subadmin"&&pf)onLogin({role:pf+"admin",companyId:p.company_id});
+      else if(p.role==="commercial"&&pf)onLogin({role:pf+"commercial",commercialId:p.commercial_id});
+      else{setAuth(null);setErr("Compte non configuré.");}
+    }catch(x){setErr("Connexion impossible. Réessayez.");}
+    setChecking(false);
   }
   var lab={fontSize:11,fontWeight:500,color:"#5b6573",marginBottom:5,letterSpacing:.3,textTransform:"uppercase"};
   var fld=Object.assign({},inp,{width:"100%",boxSizing:"border-box",padding:"11px 13px",borderRadius:10,fontSize:14,background:"#fff",color:"#1a1a18",border:"1px solid #d5dbe3"});
@@ -1540,7 +1520,11 @@ function AdminView(props){
       setUploading(false);e.target.value="";
     }catch(err){setMsg({type:"error",text:"Erreur lecture : "+err.message});}
   }
-  async function savePassword(coId,pwd){await dbUpdate("companies","id=eq."+coId,{password:pwd});setCompanies(function(prev){return prev.map(function(c){return c.id===coId?Object.assign({},c,{password:pwd}):c;});});setEditId(null);}
+  async function savePassword(coId,pwd){
+    if(!pwd||pwd.length<4){setMsg({type:"error",text:"Mot de passe : 4 caractères minimum."});return;}
+    try{await apiPost("/api/admin-users",{action:"set_password",kind:"company",companyId:coId,password:pwd});setEditId(null);setMsg({type:"ok",text:"✓ Mot de passe mis à jour."});}
+    catch(e){setMsg({type:"error",text:"Erreur : "+e.message});}
+  }
   async function deleteImport(importId,count){if(!window.confirm("Supprimer les "+count+" leads de cet import ?"))return;try{await dbDelete("leads","import_id=eq."+importId);setLeads(function(prev){return prev.filter(function(l){return l.importId!==importId;});});setMsg({type:"ok",text:"✓ Import supprimé."});}catch(err){setMsg({type:"error",text:"Erreur : "+err.message});}}
   var grouped=useMemo(function(){var r={};companies.forEach(function(c){r[c.id]=leads.filter(function(l){return l.companyId===c.id;});});return r;},[leads,companies]);
   var importGroups=useMemo(function(){var g={};leads.forEach(function(l){if(!l.importId)return;if(!g[l.importId])g[l.importId]={id:l.importId,label:l.importLabel,companyId:l.companyId,leads:[]};g[l.importId].leads.push(l);});return Object.values(g).sort(function(a,b){return b.id.localeCompare(a.id);});},[leads]);
@@ -1663,7 +1647,7 @@ function AdminView(props){
         React.createElement(KpiRow,{items:[{icon:"🏢",bg:"#FAEEDA",label:"Sociétés",value:companies.length},{icon:"🏠",bg:"#E6F1FB",label:"Atriome",value:companies.filter(function(c){return c.network==="renovation";}).length},{icon:"💧",bg:"#E3F6E8",label:"MurHumide",value:companies.filter(function(c){return c.network==="humidite";}).length}]}),
         React.createElement("div",{style:{fontSize:13,color:"#6b7684",marginBottom:12}},"Cliquez sur \"Modifier\" pour changer le mot de passe."),
         React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
-          companies.map(function(c){var net=NETWORKS[c.network],isEdit=editId===c.id;return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid "+(isEdit?net.color:"var(--color-border-tertiary)"),padding:"12px 16px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:14}},c.name),React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Login : ",React.createElement("b",null,c.login))),React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},(grouped[c.id]||[]).length+" leads"),isEdit?React.createElement("button",{onClick:function(){setEditId(null);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Annuler"):React.createElement("button",{onClick:function(){setEditId(c.id);setEditPwd(c.password);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"✏ Modifier mdp"))),isEdit&&React.createElement("div",{style:{marginTop:12,padding:"12px 14px",background:"var(--color-background-secondary)",borderRadius:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Actuel : ",React.createElement("b",null,c.password)),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Nouveau :"),React.createElement("input",{value:editPwd,onChange:function(e){setEditPwd(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&editPwd)savePassword(c.id,editPwd);},placeholder:"Nouveau mot de passe",autoFocus:true,style:{padding:"6px 10px",borderRadius:7,border:"1px solid "+net.color,fontSize:13,background:"var(--color-background-primary)",color:"var(--color-text-primary)",flex:1,minWidth:180,outline:"none"}}),React.createElement("button",{onClick:function(){if(editPwd)savePassword(c.id,editPwd);},disabled:!editPwd,style:{padding:"6px 16px",borderRadius:7,border:"none",background:editPwd?net.color:"#ccc",color:"#fff",fontWeight:500,fontSize:13,cursor:editPwd?"pointer":"not-allowed"}},"✓ Enregistrer")));})
+          companies.map(function(c){var net=NETWORKS[c.network],isEdit=editId===c.id;return React.createElement("div",{key:c.id,style:{background:"var(--color-background-primary)",borderRadius:9,border:"1px solid "+(isEdit?net.color:"var(--color-border-tertiary)"),padding:"12px 16px"}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:net.color}}),React.createElement("span",{style:{fontWeight:500,fontSize:14}},c.name),React.createElement("span",{style:{fontSize:11,background:net.light,color:net.color,padding:"1px 7px",borderRadius:9}},net.label),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},"Login : ",React.createElement("b",null,c.login))),React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)"}},(grouped[c.id]||[]).length+" leads"),isEdit?React.createElement("button",{onClick:function(){setEditId(null);},style:{padding:"5px 12px",borderRadius:7,border:"1px solid var(--color-border-secondary)",background:"transparent",fontSize:12,cursor:"pointer",color:"var(--color-text-secondary)"}},"Annuler"):React.createElement("button",{onClick:function(){setEditId(c.id);setEditPwd("");},style:{padding:"5px 12px",borderRadius:7,border:"1px solid "+net.color,background:net.light,color:net.color,fontSize:12,cursor:"pointer",fontWeight:500}},"✏ Modifier mdp"))),isEdit&&React.createElement("div",{style:{marginTop:12,padding:"12px 14px",background:"var(--color-background-secondary)",borderRadius:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("div",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Saisissez un nouveau mot de passe"),React.createElement("span",{style:{fontSize:12,color:"var(--color-text-secondary)",whiteSpace:"nowrap"}},"Nouveau :"),React.createElement("input",{value:editPwd,onChange:function(e){setEditPwd(e.target.value);},onKeyDown:function(e){if(e.key==="Enter"&&editPwd)savePassword(c.id,editPwd);},placeholder:"Nouveau mot de passe",autoFocus:true,style:{padding:"6px 10px",borderRadius:7,border:"1px solid "+net.color,fontSize:13,background:"var(--color-background-primary)",color:"var(--color-text-primary)",flex:1,minWidth:180,outline:"none"}}),React.createElement("button",{onClick:function(){if(editPwd)savePassword(c.id,editPwd);},disabled:!editPwd,style:{padding:"6px 16px",borderRadius:7,border:"none",background:editPwd?net.color:"#ccc",color:"#fff",fontWeight:500,fontSize:13,cursor:editPwd?"pointer":"not-allowed"}},"✓ Enregistrer")));})
         )
       )
     )
@@ -1783,13 +1767,18 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
     async function createCommercial(){
       if(!newLogin.trim()||!newPwd.trim()||!newNom.trim())return;setCreating(true);
       var prefix=dbTable.replace("_commerciaux","")+"c_";
-      var row={id:prefix+Date.now()+"_"+Math.random().toString(36).slice(2,6),nom:newNom.trim(),login:newLogin.trim(),password:newPwd.trim()};
-      try{await dbInsertOne(dbTable,row);setCommerciaux(function(prev){return prev.concat(row);});setNewLogin("");setNewPwd("");setNewNom("");setMsg({type:"ok",text:"✓ Commercial "+row.nom+" créé."});}
-      catch(e){setMsg({type:"error",text:"Erreur : "+e.message});}
+      var row={id:prefix+Date.now()+"_"+Math.random().toString(36).slice(2,6),nom:newNom.trim(),login:newLogin.trim()};
+      try{
+        await dbInsertOne(dbTable,row);
+        try{await apiPost("/api/admin-users",{action:"create_commercial",table:dbTable,commercialId:row.id,login:row.login,password:newPwd.trim()});}
+        catch(e2){try{await dbDelete(dbTable,"id=eq."+row.id);}catch(x){}throw e2;}
+        setCommerciaux(function(prev){return prev.concat(row);});setNewLogin("");setNewPwd("");setNewNom("");setMsg({type:"ok",text:"✓ Commercial "+row.nom+" créé."});
+      }catch(e){setMsg({type:"error",text:"Erreur : "+e.message});}
       setCreating(false);
     }
     async function deleteCommercial(id){
       if(!window.confirm("Supprimer ce commercial ?"))return;
+      try{await apiPost("/api/admin-users",{action:"delete_commercial",table:dbTable,commercialId:id});}catch(e3){alert("Suppression impossible : "+e3.message);return;}
       await dbDelete(dbTable,"id=eq."+id);
       var al=myLeads.filter(function(l){return l.assignedTo===id;});
       for(var i=0;i<al.length;i++){await dbUpdate("leads","id=eq."+al[i].id,{assigned_to:null});}
@@ -1926,7 +1915,7 @@ var MH83CommercialView=makeSubCommercialView("c20","83 MH","humidite","mh83_comm
 var ATM52CommercialView=makeSubCommercialView("c5","52 ATM","renovation","atm52_commerciaux");
 
 export default function App(){
-  var [session,setSession]=useState(function(){try{var s=sessionStorage.getItem("leads_session");return s?JSON.parse(s):null;}catch(e){return null;}});
+  var [session,setSession]=useState(function(){try{var s=sessionStorage.getItem("leads_session");return s&&AUTH.access?JSON.parse(s):null;}catch(e){return null;}});
   var [leads,setLeads]=useState([]);
   var [companies,setCompanies]=useState(INIT_COMPANIES);
   var [mh76Commerciaux,setMh76Commerciaux]=useState([]);
@@ -1936,7 +1925,12 @@ export default function App(){
   var [loading,setLoading]=useState(true);
   var [dbError,setDbError]=useState(null);
   function handleLogin(s){setSession(s);try{sessionStorage.setItem("leads_session",JSON.stringify(s));}catch(e){}}
-  function handleLogout(){setSession(null);try{sessionStorage.removeItem("leads_session");}catch(e){}}
+  function handleLogout(){setAuth(null);setSession(null);setLeads([]);try{sessionStorage.removeItem("leads_session");}catch(e){}}
+  useEffect(function(){
+    if(!session)return;
+    var iv=setInterval(async function(){if(AUTH.exp&&Date.now()>AUTH.exp-120000){var ok=await refreshAuth();if(!ok)handleLogout();}},60000);
+    return function(){clearInterval(iv);};
+  },[session]);
   useEffect(function(){
     async function load(){
       setLoading(true);
@@ -1953,8 +1947,9 @@ export default function App(){
       }catch(e){setDbError(e&&e.message?e.message:"Erreur réseau");}
       setLoading(false);
     }
-    load();
-  },[]);
+    if(!session){setLoading(false);return;}
+    (async function(){if(AUTH.exp&&Date.now()>AUTH.exp-60000){var ok=await refreshAuth();if(!ok){handleLogout();setLoading(false);return;}}load();})();
+  },[session&&session.role+"|"+(session.companyId||session.commercialId||"")]);
   if(loading)return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:DOFE_BG,flexDirection:"column",gap:22,padding:20,boxSizing:"border-box"}},
     React.createElement("style",null,DOFE_CSS),
     React.createElement("div",{style:{background:"#fff",borderRadius:18,padding:"22px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.35)",animation:"dofePulse 2s ease-in-out infinite"}},React.createElement("img",{src:LOGO_SRC,alt:"Dofelink",style:{display:"block",width:240,maxWidth:"65vw"}})),
