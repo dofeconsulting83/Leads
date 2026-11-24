@@ -1283,7 +1283,7 @@ function ContactSheet(props){
       props.canEdit&&React.createElement("button",{onClick:deleteContact,disabled:busy,title:"Supprimer ce contact",style:{padding:"11px 14px",borderRadius:12,border:"1px solid #e9c4c4",background:"#fff",color:"#9B2C2C",fontWeight:600,fontSize:14,cursor:"pointer"}},"🗑️ Supprimer")),
     React.createElement("div",{style:{display:"flex",gap:4,borderBottom:"1px solid #e3e8ef",marginBottom:16,overflowX:"auto"}},tabs.map(function(t){var on=tab===t[0],dis=!!soon[t[0]];return React.createElement("button",{key:t[0],onClick:function(){setTab(t[0]);},style:{padding:"11px 18px",border:"none",background:"transparent",borderBottom:on?"3px solid "+net.color:"3px solid transparent",color:on?net.color:dis?"#9aa4b2":"#4a5565",fontWeight:on?700:500,fontSize:14,cursor:"pointer",whiteSpace:"nowrap"}},t[1]);})),
     msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:10,background:msg.t==="ok"?"#E8F6EC":"#FDECEC",color:msg.t==="ok"?"#1E6B35":"#9B2C2C",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},React.createElement("span",null,msg.x),React.createElement("button",{onClick:function(){setMsg(null);},style:{border:"none",background:"transparent",cursor:"pointer",color:"inherit"}},"✕")),
-    tab==="diag"&&React.createElement(DiagnosticsTab,{company:company,author:author,contact:c,net:net,projects:projects}),
+    tab==="diag"&&(projects&&projects.length?projects.map(function(p){return React.createElement("div",{key:p.id,style:{marginBottom:22}},React.createElement("div",{style:{fontWeight:700,fontSize:15,margin:"0 0 8px"}},"📁 "+p.title+" "+("("+(p.reference||"")+")")),React.createElement(DiagnosticsTab,{company:company,author:author,contact:c,net:net,fixed:p}));}):React.createElement("div",{style:Object.assign({},card,{textAlign:"center",color:"#6b7684"})},"Créez d'abord un projet pour y rattacher des diagnostics.")),
     soon[tab]&&React.createElement("div",{style:Object.assign({},card,{padding:50,textAlign:"center",color:"#6b7684"})},React.createElement("div",{style:{fontSize:30,marginBottom:8}},"🚧"),soon[tab]),
     tab==="overview"&&React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:16,alignItems:"start"}},
       React.createElement("div",{style:card},
@@ -1328,6 +1328,7 @@ function ContactSheet(props){
               React.createElement("textarea",{rows:3,value:editP.description||"",onChange:function(ev){setEditP(Object.assign({},editP,{description:ev.target.value}));},placeholder:"Description",style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
               React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setEditP(null);},style:{padding:"8px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:saveProject,disabled:busy,style:{padding:"8px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")))
             :React.createElement("button",{onClick:function(){setEditP(Object.assign({},p,{rdv_at:toLocalInput(p.rdv_at),services:(p.services&&p.services.length)?p.services:(p.service?[p.service]:[])}));},style:{marginTop:10,padding:"7px 16px",borderRadius:9,border:"1px solid "+net.color,background:net.light,color:net.color,fontWeight:600,fontSize:13,cursor:"pointer"}},"✏️ Modifier le projet / le rendez-vous"),
+          React.createElement("div",{style:{marginTop:14,paddingTop:12,borderTop:"1px solid #eef1f6"}},React.createElement("div",{style:{fontWeight:700,fontSize:14,marginBottom:8}},"🩺 Diagnostics de ce projet"),React.createElement(DiagnosticsTab,{company:company,author:author,contact:c,net:net,fixed:p})),
           React.createElement(StagePhotos,{company:company,net:net,author:author,contactId:c.id,project:p})));})),
     tab==="history"&&React.createElement("div",{style:card},
       React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},[["tout","Tout"],["comment","Commentaires"],["change","Modifications"],["project","Projets"]].map(function(f){var on=actF===f[0];return React.createElement("button",{key:f[0],onClick:function(){setActF(f[0]);},style:{padding:"6px 14px",borderRadius:999,border:"1px solid "+(on?net.color:"#e3e8ef"),background:on?net.light:"#fff",color:on?net.color:"#4a5565",fontWeight:on?600:500,fontSize:13,cursor:"pointer"}},f[1]);})),
@@ -1388,23 +1389,26 @@ function PhotoGallery(props){
 
 /* ---- Diagnostics : technicien / IA séparés ---- */
 function DiagnosticsTab(props){
-  var company=props.company,author=props.author,c=props.contact,net=props.net,projects=props.projects||[];
+  var company=props.company,author=props.author,c=props.contact,net=props.net,fixed=props.fixed,projects=fixed?[fixed]:(props.projects||[]);
+  var [label,setLabel]=useState("");
   var [list,setList]=useState(null),[open,setOpen]=useState(null),[msg,setMsg]=useState(null),[pid,setPid]=useState(""),[tid,setTid]=useState(""),[allT,setAllT]=useState(false);
-  function load(){return dbSelect("diagnostics","contact_id=eq."+c.id+"&order=created_at.desc").then(setList).catch(function(e){setMsg(e.message);setList([]);});}
-  useEffect(function(){load();},[c.id]);
+  function load(){return dbSelect("diagnostics",(fixed?"project_id=eq."+fixed.id:"contact_id=eq."+c.id)+"&order=created_at.desc").then(setList).catch(function(e){setMsg(e.message);setList([]);});}
+  useEffect(function(){load();},[c.id,fixed&&fixed.id]);
+  useEffect(function(){if(fixed)setPid(fixed.id);},[fixed&&fixed.id]);
   var card={background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:18,marginBottom:12};
   async function create(){
     if(!pid){setMsg("Choisissez d'abord le projet concerné.");return;}
     if(!tid){setMsg("Choisissez le modèle de diagnostic.");return;}
-    var row={id:newId("dg"),company_id:company.id,contact_id:c.id,project_id:pid,template_id:tid,answers:{},status:"brouillon",tech_author:author||"",created_by:author||""};
-    try{await dbInsertOne("diagnostics",row);await logActivity(company,author,c.id,pid,"diagnostic.created","Diagnostic créé",null);await load();setOpen(row.id);setMsg(null);}catch(e){setMsg(e.message);}
+    var row={id:newId("dg"),company_id:company.id,contact_id:c.id,project_id:pid,template_id:tid,label:label.trim()||null,answers:{},status:"brouillon",tech_author:author||"",created_by:author||""};
+    try{await dbInsertOne("diagnostics",row);await logActivity(company,author,c.id,pid,"diagnostic.created","Diagnostic créé",null);await load();setOpen(row.id);setMsg(null);setLabel("");}catch(e){setMsg(e.message);}
   }
   if(list===null)return React.createElement("div",{style:{padding:30,textAlign:"center",color:"#6b7684"}},"Chargement…");
   return React.createElement("div",null,
     msg&&React.createElement("div",{style:{padding:"9px 12px",borderRadius:10,background:"#FDECEC",color:"#9B2C2C",fontSize:13,marginBottom:10}},msg),
     projects.length===0?React.createElement("div",{style:Object.assign({},card,{textAlign:"center",color:"#6b7684"})},"Créez d'abord un projet pour pouvoir y rattacher un diagnostic.")
     :React.createElement("div",{style:Object.assign({},card,{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"})},
-      React.createElement("select",{value:pid,onChange:function(e){setPid(e.target.value);setTid("");},style:{padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",flex:"1 1 240px"}},React.createElement("option",{value:""},"Projet concerné…"),projects.map(function(p){return React.createElement("option",{key:p.id,value:p.id},(p.reference||"")+" · "+p.title);})),
+      !fixed&&React.createElement("select",{value:pid,onChange:function(e){setPid(e.target.value);setTid("");},style:{padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",flex:"1 1 240px"}},React.createElement("option",{value:""},"Projet concerné…"),projects.map(function(p){return React.createElement("option",{key:p.id,value:p.id},(p.reference||"")+" · "+p.title);})),
+      pid&&React.createElement("input",{value:label,onChange:function(e){setLabel(e.target.value);},placeholder:"Problème diagnostiqué (ex : remontées capillaires, salon)",style:{padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",flex:"1 1 260px"}}),
       pid&&React.createElement("select",{value:tid,onChange:function(e){setTid(e.target.value);},style:{padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",flex:"1 1 240px"}},React.createElement("option",{value:""},"Modèle de diagnostic…"),templatesFor(company,projects.find(function(p){return p.id===pid;}),allT).map(function(t){return React.createElement("option",{key:t.id,value:t.id},t.title);})),
       pid&&React.createElement("label",{style:{fontSize:12.5,color:"#6b7684",display:"flex",gap:5,alignItems:"center"}},React.createElement("input",{type:"checkbox",checked:allT,onChange:function(e){setAllT(e.target.checked);setTid("");}}),"Tous les modèles"),
       React.createElement("button",{onClick:create,style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},"+ Nouveau diagnostic")),
@@ -1427,10 +1431,18 @@ function DiagnosticCard(props){
     try{await dbUpdate("diagnostics","id=eq."+d.id,patch);await logActivity(company,author,d.contact_id,d.project_id,"diagnostic.updated",act||"Diagnostic enregistré",null);setM("Enregistré.");await props.onSaved();}catch(e){setM("Erreur : "+e.message);}
     setBusy(false);
   }
+  async function del(){
+    if(!window.confirm("Supprimer ce diagnostic et ses photos ? Action irréversible."))return;
+    setBusy(true);
+    try{var ph=await dbSelect("project_photos","diagnostic_id=eq."+d.id);for(var i=0;i<ph.length;i++){await storageRemove(ph[i].path);}
+      await dbDelete("project_photos","diagnostic_id=eq."+d.id);await dbDelete("diagnostics","id=eq."+d.id);
+      await logActivity(company,author,d.contact_id,d.project_id,"diagnostic.deleted","Diagnostic supprimé : "+(d.label||"sans intitulé"),null);await props.onSaved();}
+    catch(e){setM("Erreur : "+e.message);setBusy(false);}
+  }
   var aiTxt={aucune:"Aucune suggestion",suggeree:"Suggestion à valider",acceptee:"Retenue par le technicien",rejetee:"Écartée"}[d.ai_status||"aucune"];
   return React.createElement("div",{style:card},
     React.createElement("div",{onClick:props.onToggle,style:{display:"flex",justifyContent:"space-between",gap:10,cursor:"pointer",flexWrap:"wrap"}},
-      React.createElement("div",null,React.createElement("div",{style:{fontWeight:700,fontSize:15}},(tpl?tpl.title:"Diagnostic")+" — "+(props.project?props.project.title:"projet")),React.createElement("div",{style:{fontSize:12.5,color:"#6b7684"}},"Créé le "+fmtDT(d.created_at)+(d.tech_author?" · "+d.tech_author:""))),
+      React.createElement("div",null,React.createElement("div",{style:{fontWeight:700,fontSize:15}},(d.label||(tpl?tpl.title:"Diagnostic"))+(d.label&&tpl?" · "+tpl.title:"")),React.createElement("div",{style:{fontSize:12.5,color:"#6b7684"}},"Créé le "+fmtDT(d.created_at)+(d.tech_author?" · "+d.tech_author:""))),
       React.createElement("span",{style:{alignSelf:"flex-start",fontSize:12,fontWeight:600,padding:"3px 12px",borderRadius:999,background:locked?"#E3F6E8":"#FAEEDA",color:locked?"#1E6B35":"#9A5B10"}},locked?"✔ Validé":"Brouillon")),
     props.open&&React.createElement("div",{style:{marginTop:14}},
       React.createElement("div",{style:{border:"1px solid "+net.color,borderRadius:12,padding:14,marginBottom:14}},
@@ -1455,7 +1467,8 @@ function DiagnosticCard(props){
       React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
         !locked&&React.createElement("button",{onClick:function(){save(null);},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid "+net.color,background:"#fff",color:net.color,fontWeight:600,cursor:"pointer"}},"Enregistrer le brouillon"),
         !locked&&React.createElement("button",{onClick:function(){if(window.confirm("Valider ce diagnostic ? Il sera verrouillé (réouvrable ensuite)."))save({status:"valide",validated_by:author,validated_at:new Date().toISOString()},"Diagnostic validé");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},"✔ Valider"),
-        locked&&React.createElement("button",{onClick:function(){save({status:"brouillon",validated_by:null,validated_at:null},"Diagnostic rouvert pour modification");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"↩ Rouvrir pour modifier"))));
+        locked&&React.createElement("button",{onClick:function(){save({status:"brouillon",validated_by:null,validated_at:null},"Diagnostic rouvert pour modification");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"↩ Rouvrir pour modifier"),
+        React.createElement("button",{onClick:del,disabled:busy,style:{padding:"10px 16px",borderRadius:10,border:"1px solid #e9c4c4",background:"#fff",color:"#9B2C2C",fontWeight:600,cursor:"pointer",marginLeft:"auto"}},"🗑️ Supprimer"))));
 }
 
 /* ---- Prestations & libellés personnalisables ---- */
