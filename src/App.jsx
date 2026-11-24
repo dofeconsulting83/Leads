@@ -1121,7 +1121,7 @@ function ContactsModule(props){
   },[list,q,tf]);
   var cur=sel&&list?list.find(function(c){return c.id===sel;}):null;
   if(sel&&list&&!cur){return React.createElement("div",{style:Object.assign({},card,{padding:40,textAlign:"center",color:"#6b7684"})},"Contact introuvable. ",React.createElement("button",{onClick:function(){setSel(null);load();},style:{marginLeft:8,padding:"6px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer"}},"Retour à la liste"));}
-  if(cur){return React.createElement(ContactSheet,{company:company,author:author,contact:cur,net:net,services:servicesOf(settings,company),onBack:function(){setSel(null);load();loadP();},onChanged:function(u){setList(function(p){return p.map(function(c){return c.id===u.id?u:c;});});}});}
+  if(cur){return React.createElement(ContactSheet,{canEdit:props.canEdit,company:company,author:author,contact:cur,net:net,services:servicesOf(settings,company),onBack:function(){setSel(null);load();loadP();},onDeleted:function(){setSel(null);setList(function(p){return p.filter(function(x){return x.id!==sel;});});loadP();},onChanged:function(u){setList(function(p){return p.map(function(c){return c.id===u.id?u:c;});});}});}
   if(list===null)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"#6b7684"}},"Chargement…");
   var inp={padding:"10px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#f8fafc",fontSize:14};
   return React.createElement("div",null,
@@ -1212,6 +1212,17 @@ function ContactSheet(props){
     }catch(e){setMsg({t:"err",x:e.message});}
     setBusy(false);
   }
+  async function deleteContact(){
+    var n=projects?projects.length:0;
+    if(!window.confirm("Supprimer définitivement « "+contactName(c)+" » ?\n\nCela supprime aussi ses "+n+" projet(s), diagnostics, photos et son historique. Cette action est irréversible."))return;
+    setBusy(true);
+    try{
+      var ph=await dbSelect("project_photos","contact_id=eq."+c.id);
+      for(var i=0;i<ph.length;i++){await storageRemove(ph[i].path);}
+      await dbDelete("contacts","id=eq."+c.id);
+      props.onDeleted();
+    }catch(e){setMsg({t:"err",x:"Suppression impossible : "+e.message});setBusy(false);}
+  }
   async function saveNote(){
     setNoteBusy(true);
     try{await dbUpdate("contacts","id=eq."+c.id,{notes:note||null,updated_at:new Date().toISOString()});await logActivity(company,author,c.id,null,"contact.updated","Notes internes modifiées",null);props.onChanged(Object.assign({},c,{notes:note||null}));loadA();setMsg({t:"ok",x:"Notes enregistrées."});}catch(e){setMsg({t:"err",x:e.message});}
@@ -1268,7 +1279,8 @@ function ContactSheet(props){
           (c.address||c.city)&&React.createElement("span",null,"📍 "+[c.address,c.postal_code,c.city].filter(Boolean).join(", ")))),
       React.createElement("div",{style:{flex:"1 1 220px",maxWidth:300}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:6}},"Avancement"),projects&&projects.length?stageBar(projects[0].stage,net):React.createElement("span",{style:{color:"#9aa4b2",fontSize:13}},"Aucun projet")),
       React.createElement("div",{style:{display:"flex",gap:10}},[["Projets",projects?projects.length:"…"],["Actions",acts?acts.length:"…"]].map(function(k){return React.createElement("div",{key:k[0],style:{textAlign:"center",padding:"10px 20px",borderRadius:14,border:"1px solid #eef1f6",background:"#f8fafc"}},React.createElement("div",{style:{fontSize:22,fontWeight:700,color:"#12263f"}},k[1]),React.createElement("div",{style:{fontSize:12,color:"#6b7684"}},k[0]));})),
-      React.createElement("button",{onClick:function(){setNp({title:"",services:[],site_address:"",due_date:"",description:""});setTab("projects");},style:{padding:"11px 20px",borderRadius:12,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau projet")),
+      React.createElement("button",{onClick:function(){setNp({title:"",services:[],site_address:"",due_date:"",description:""});setTab("projects");},style:{padding:"11px 20px",borderRadius:12,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau projet"),
+      props.canEdit&&React.createElement("button",{onClick:deleteContact,disabled:busy,title:"Supprimer ce contact",style:{padding:"11px 14px",borderRadius:12,border:"1px solid #e9c4c4",background:"#fff",color:"#9B2C2C",fontWeight:600,fontSize:14,cursor:"pointer"}},"🗑️ Supprimer")),
     React.createElement("div",{style:{display:"flex",gap:4,borderBottom:"1px solid #e3e8ef",marginBottom:16,overflowX:"auto"}},tabs.map(function(t){var on=tab===t[0],dis=!!soon[t[0]];return React.createElement("button",{key:t[0],onClick:function(){setTab(t[0]);},style:{padding:"11px 18px",border:"none",background:"transparent",borderBottom:on?"3px solid "+net.color:"3px solid transparent",color:on?net.color:dis?"#9aa4b2":"#4a5565",fontWeight:on?700:500,fontSize:14,cursor:"pointer",whiteSpace:"nowrap"}},t[1]);})),
     msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:10,background:msg.t==="ok"?"#E8F6EC":"#FDECEC",color:msg.t==="ok"?"#1E6B35":"#9B2C2C",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},React.createElement("span",null,msg.x),React.createElement("button",{onClick:function(){setMsg(null);},style:{border:"none",background:"transparent",cursor:"pointer",color:"inherit"}},"✕")),
     tab==="diag"&&React.createElement(DiagnosticsTab,{company:company,author:author,contact:c,net:net,projects:projects}),
