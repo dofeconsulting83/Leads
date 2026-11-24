@@ -1328,7 +1328,7 @@ function ContactSheet(props){
               React.createElement("textarea",{rows:3,value:editP.description||"",onChange:function(ev){setEditP(Object.assign({},editP,{description:ev.target.value}));},placeholder:"Description",style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
               React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setEditP(null);},style:{padding:"8px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:saveProject,disabled:busy,style:{padding:"8px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")))
             :React.createElement("button",{onClick:function(){setEditP(Object.assign({},p,{rdv_at:toLocalInput(p.rdv_at),services:(p.services&&p.services.length)?p.services:(p.service?[p.service]:[])}));},style:{marginTop:10,padding:"7px 16px",borderRadius:9,border:"1px solid "+net.color,background:net.light,color:net.color,fontWeight:600,fontSize:13,cursor:"pointer"}},"✏️ Modifier le projet / le rendez-vous"),
-          React.createElement(PhotoGallery,{company:company,net:net,author:author,contactId:c.id,projectId:p.id,moment:"rdv"})));})),
+          React.createElement(StagePhotos,{company:company,net:net,author:author,contactId:c.id,project:p})));})),
     tab==="history"&&React.createElement("div",{style:card},
       React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},[["tout","Tout"],["comment","Commentaires"],["change","Modifications"],["project","Projets"]].map(function(f){var on=actF===f[0];return React.createElement("button",{key:f[0],onClick:function(){setActF(f[0]);},style:{padding:"6px 14px",borderRadius:999,border:"1px solid "+(on?net.color:"#e3e8ef"),background:on?net.light:"#fff",color:on?net.color:"#4a5565",fontWeight:on?600:500,fontSize:13,cursor:"pointer"}},f[1]);})),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14}},React.createElement("input",{value:comment,onChange:function(e){setComment(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")addComment();},placeholder:"Ajouter un commentaire…",style:Object.assign({},inp,{flex:1})}),React.createElement("button",{onClick:addComment,disabled:!comment.trim(),style:{padding:"8px 18px",borderRadius:10,border:"none",background:comment.trim()?net.color:"#c9d4e2",color:"#fff",fontWeight:600,cursor:"pointer"}},"Ajouter")),
@@ -1348,11 +1348,11 @@ async function signedUrl(path){
 }
 
 function PhotoGallery(props){
-  var company=props.company,net=props.net,filt=props.diagnosticId?("diagnostic_id=eq."+props.diagnosticId):("project_id=eq."+props.projectId+"&moment=eq."+(props.moment||"rdv"));
+  var company=props.company,net=props.net,filt=(props.diagnosticId?("diagnostic_id=eq."+props.diagnosticId):("project_id=eq."+props.projectId+"&diagnostic_id=is.null"))+"&moment=eq."+encodeURIComponent(props.moment||"rdv");
   var [photos,setPhotos]=useState(null),[urls,setUrls]=useState({}),[busy,setBusy]=useState(false),[err,setErr]=useState(""),[big,setBig]=useState(null);
   var fileRef=useRef(null),camRef=useRef(null);
   function load(){return dbSelect("project_photos",filt+"&order=created_at.asc").then(async function(r){setPhotos(r);var m={};await Promise.all(r.map(async function(p){m[p.id]=await signedUrl(p.path);}));setUrls(m);}).catch(function(e){setErr(e.message);setPhotos([]);});}
-  useEffect(function(){load();},[props.projectId,props.diagnosticId]);
+  useEffect(function(){load();},[props.projectId,props.diagnosticId,props.moment]);
   async function onFiles(e){
     var files=Array.prototype.slice.call(e.target.files||[]);e.target.value="";if(!files.length)return;
     setBusy(true);setErr("");
@@ -1389,13 +1389,14 @@ function PhotoGallery(props){
 /* ---- Diagnostics : technicien / IA séparés ---- */
 function DiagnosticsTab(props){
   var company=props.company,author=props.author,c=props.contact,net=props.net,projects=props.projects||[];
-  var [list,setList]=useState(null),[open,setOpen]=useState(null),[msg,setMsg]=useState(null),[pid,setPid]=useState("");
+  var [list,setList]=useState(null),[open,setOpen]=useState(null),[msg,setMsg]=useState(null),[pid,setPid]=useState(""),[tid,setTid]=useState(""),[allT,setAllT]=useState(false);
   function load(){return dbSelect("diagnostics","contact_id=eq."+c.id+"&order=created_at.desc").then(setList).catch(function(e){setMsg(e.message);setList([]);});}
   useEffect(function(){load();},[c.id]);
   var card={background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:18,marginBottom:12};
   async function create(){
     if(!pid){setMsg("Choisissez d'abord le projet concerné.");return;}
-    var row={id:newId("dg"),company_id:company.id,contact_id:c.id,project_id:pid,status:"brouillon",tech_author:author||"",created_by:author||""};
+    if(!tid){setMsg("Choisissez le modèle de diagnostic.");return;}
+    var row={id:newId("dg"),company_id:company.id,contact_id:c.id,project_id:pid,template_id:tid,answers:{},status:"brouillon",tech_author:author||"",created_by:author||""};
     try{await dbInsertOne("diagnostics",row);await logActivity(company,author,c.id,pid,"diagnostic.created","Diagnostic créé",null);await load();setOpen(row.id);setMsg(null);}catch(e){setMsg(e.message);}
   }
   if(list===null)return React.createElement("div",{style:{padding:30,textAlign:"center",color:"#6b7684"}},"Chargement…");
@@ -1403,21 +1404,25 @@ function DiagnosticsTab(props){
     msg&&React.createElement("div",{style:{padding:"9px 12px",borderRadius:10,background:"#FDECEC",color:"#9B2C2C",fontSize:13,marginBottom:10}},msg),
     projects.length===0?React.createElement("div",{style:Object.assign({},card,{textAlign:"center",color:"#6b7684"})},"Créez d'abord un projet pour pouvoir y rattacher un diagnostic.")
     :React.createElement("div",{style:Object.assign({},card,{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"})},
-      React.createElement("select",{value:pid,onChange:function(e){setPid(e.target.value);},style:{padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",flex:"1 1 240px"}},React.createElement("option",{value:""},"Projet concerné…"),projects.map(function(p){return React.createElement("option",{key:p.id,value:p.id},(p.reference||"")+" · "+p.title);})),
+      React.createElement("select",{value:pid,onChange:function(e){setPid(e.target.value);setTid("");},style:{padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",flex:"1 1 240px"}},React.createElement("option",{value:""},"Projet concerné…"),projects.map(function(p){return React.createElement("option",{key:p.id,value:p.id},(p.reference||"")+" · "+p.title);})),
+      pid&&React.createElement("select",{value:tid,onChange:function(e){setTid(e.target.value);},style:{padding:"9px 12px",borderRadius:10,border:"1px solid #d9e0ea",flex:"1 1 240px"}},React.createElement("option",{value:""},"Modèle de diagnostic…"),templatesFor(company,projects.find(function(p){return p.id===pid;}),allT).map(function(t){return React.createElement("option",{key:t.id,value:t.id},t.title);})),
+      pid&&React.createElement("label",{style:{fontSize:12.5,color:"#6b7684",display:"flex",gap:5,alignItems:"center"}},React.createElement("input",{type:"checkbox",checked:allT,onChange:function(e){setAllT(e.target.checked);setTid("");}}),"Tous les modèles"),
       React.createElement("button",{onClick:create,style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},"+ Nouveau diagnostic")),
     list.length===0&&projects.length>0&&React.createElement("div",{style:{color:"#9aa4b2",textAlign:"center",padding:20,fontSize:13}},"Aucun diagnostic pour ce contact."),
     list.map(function(d){var pr=projects.find(function(p){return p.id===d.project_id;});return React.createElement(DiagnosticCard,{key:d.id,diag:d,project:pr,company:company,author:author,contact:c,net:net,open:open===d.id,onToggle:function(){setOpen(open===d.id?null:d.id);},onSaved:load});}));
 }
 function DiagnosticCard(props){
   var d=props.diag,net=props.net,company=props.company,author=props.author,locked=d.status==="valide";
-  var [f,setF]=useState(d),[busy,setBusy]=useState(false),[m,setM]=useState(null);
+  var [f,setF]=useState(Object.assign({},d,{answers:d.answers||{}})),[busy,setBusy]=useState(false),[m,setM]=useState(null);
+  var tpl=DIAG_TEMPLATES.find(function(t){return t.id===d.template_id;});
+  function setAns(k,v){var a=Object.assign({},f.answers);a[k]=v;setF(Object.assign({},f,{answers:a}));}
   var card={background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:18,marginBottom:12};
   var ta={width:"100%",boxSizing:"border-box",padding:"9px 11px",borderRadius:10,border:"1px solid #d9e0ea",fontSize:13.5,fontFamily:"inherit",resize:"vertical",background:locked?"#f5f7fa":"#fff"};
   function set(k,v){var n=Object.assign({},f);n[k]=v;setF(n);}
-  var TF=[["tech_observations","Observations sur site",4],["tech_rooms","Pièces / zones concernées",2],["tech_causes","Causes identifiées",3],["tech_conclusion","Conclusion du technicien",3],["tech_works","Travaux préconisés",3]];
+  var TF=[["tech_observations","Observations générales",3],["tech_rooms","Pièces / zones concernées",2],["tech_causes","Causes identifiées (confirmées par le technicien)",3],["tech_conclusion","Conclusion du technicien",3],["tech_works","Préconisations / travaux",3]];
   async function save(extra,act){
     setBusy(true);setM(null);
-    var patch={tech_observations:f.tech_observations||null,tech_rooms:f.tech_rooms||null,tech_causes:f.tech_causes||null,tech_conclusion:f.tech_conclusion||null,tech_works:f.tech_works||null,tech_humidity_pct:f.tech_humidity_pct===""||f.tech_humidity_pct==null?null:Number(f.tech_humidity_pct),tech_author:d.tech_author||author,updated_at:new Date().toISOString()};
+    var patch={tech_observations:f.tech_observations||null,tech_rooms:f.tech_rooms||null,tech_causes:f.tech_causes||null,tech_conclusion:f.tech_conclusion||null,tech_works:f.tech_works||null,tech_humidity_pct:f.tech_humidity_pct===""||f.tech_humidity_pct==null?null:Number(f.tech_humidity_pct),answers:f.answers,tech_author:d.tech_author||author,updated_at:new Date().toISOString()};
     Object.assign(patch,extra||{});
     try{await dbUpdate("diagnostics","id=eq."+d.id,patch);await logActivity(company,author,d.contact_id,d.project_id,"diagnostic.updated",act||"Diagnostic enregistré",null);setM("Enregistré.");await props.onSaved();}catch(e){setM("Erreur : "+e.message);}
     setBusy(false);
@@ -1425,14 +1430,20 @@ function DiagnosticCard(props){
   var aiTxt={aucune:"Aucune suggestion",suggeree:"Suggestion à valider",acceptee:"Retenue par le technicien",rejetee:"Écartée"}[d.ai_status||"aucune"];
   return React.createElement("div",{style:card},
     React.createElement("div",{onClick:props.onToggle,style:{display:"flex",justifyContent:"space-between",gap:10,cursor:"pointer",flexWrap:"wrap"}},
-      React.createElement("div",null,React.createElement("div",{style:{fontWeight:700,fontSize:15}},"Diagnostic — "+(props.project?props.project.title:"projet")),React.createElement("div",{style:{fontSize:12.5,color:"#6b7684"}},"Créé le "+fmtDT(d.created_at)+(d.tech_author?" · "+d.tech_author:""))),
+      React.createElement("div",null,React.createElement("div",{style:{fontWeight:700,fontSize:15}},(tpl?tpl.title:"Diagnostic")+" — "+(props.project?props.project.title:"projet")),React.createElement("div",{style:{fontSize:12.5,color:"#6b7684"}},"Créé le "+fmtDT(d.created_at)+(d.tech_author?" · "+d.tech_author:""))),
       React.createElement("span",{style:{alignSelf:"flex-start",fontSize:12,fontWeight:600,padding:"3px 12px",borderRadius:999,background:locked?"#E3F6E8":"#FAEEDA",color:locked?"#1E6B35":"#9A5B10"}},locked?"✔ Validé":"Brouillon")),
     props.open&&React.createElement("div",{style:{marginTop:14}},
       React.createElement("div",{style:{border:"1px solid "+net.color,borderRadius:12,padding:14,marginBottom:14}},
         React.createElement("div",{style:{fontWeight:700,color:net.color,marginBottom:10,fontSize:13.5}},"🧑‍🔧 Partie technicien (saisie humaine)"),
+        React.createElement("div",{style:{fontSize:12,color:"#6b7684",background:"#f8fafc",borderRadius:8,padding:"8px 10px",marginBottom:12}},"Une observation visuelle n'est pas une mesure ni une cause confirmée : utilisez « Non vérifié » tant que ce n'est pas contrôlé."),
+        tpl&&tpl.sections.map(function(sec){return React.createElement("div",{key:sec.id,style:{border:"1px solid #e3e8ef",borderRadius:12,padding:"12px 14px",marginBottom:12}},
+          React.createElement("div",{style:{fontWeight:700,fontSize:13.5,marginBottom:4}},sec.title),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",columnGap:24}},sec.fields.map(function(fl){return React.createElement(DiagField,{key:fl[0],field:fl,locked:locked,value:f.answers[sec.id+"."+fl[0]],onChange:function(v){setAns(sec.id+"."+fl[0],v);}});})),
+          React.createElement(PhotoGallery,{company:company,net:net,author:author,contactId:d.contact_id,projectId:d.project_id,diagnosticId:d.id,moment:"diag:"+sec.id}));}),
+        React.createElement("div",{style:{fontWeight:700,fontSize:13.5,margin:"6px 0 8px"}},"Synthèse du technicien"),
         TF.map(function(t){return React.createElement("div",{key:t[0],style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:3}},t[1]),React.createElement("textarea",{rows:t[2],disabled:locked,value:f[t[0]]||"",onChange:function(e){set(t[0],e.target.value);},style:ta}));}),
-        React.createElement("div",{style:{marginBottom:6}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:3}},"Taux d'humidité mesuré (%)"),React.createElement("input",{type:"number",step:"0.1",disabled:locked,value:f.tech_humidity_pct==null?"":f.tech_humidity_pct,onChange:function(e){set("tech_humidity_pct",e.target.value);},style:Object.assign({},ta,{width:160,resize:"none"})})),
-        React.createElement(PhotoGallery,{company:company,net:net,author:author,contactId:d.contact_id,projectId:d.project_id,diagnosticId:d.id,moment:"diagnostic"})),
+        null,
+        React.createElement(PhotoGallery,{company:company,net:net,author:author,contactId:d.contact_id,projectId:d.project_id,diagnosticId:d.id,moment:"diag:general"})),
       React.createElement("div",{style:{border:"1px dashed #9aa4b2",borderRadius:12,padding:14,marginBottom:14,background:"#fafbfd"}},
         React.createElement("div",{style:{fontWeight:700,color:"#5B50C9",marginBottom:6,fontSize:13.5}},"🤖 Suggestion IA (distincte, jamais incluse sans validation)"),
         React.createElement("div",{style:{fontSize:12.5,color:"#6b7684",marginBottom:8}},"Statut : "+aiTxt),
@@ -1507,6 +1518,59 @@ function SettingsPanel(props){
     React.createElement("div",{style:{marginTop:12,display:"flex",gap:8}},React.createElement("button",{onClick:function(){setLabels({});setServices((DEFAULT_SERVICES[company.network]||[]).join("\n"));},style:{padding:"9px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Valeurs par défaut"),React.createElement("button",{onClick:save,disabled:busy,style:{padding:"9px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")));
 }
 
+/* ---- Modèles de diagnostic dynamiques ---- */
+// types : y = Oui/Non/Non vérifié (+commentaire) · n = nombre (unité) · s = liste · t = texte
+var DIAG_TEMPLATES=[
+ {id:"mh_humidite",network:"humidite",title:"Diagnostic humidité (MurHumide)",match:["capillair","salp","humid","infiltr","étanch","etanch","ventil","moisis","drain","cuvel"],sections:[
+  {id:"sels",title:"Sels, enduits et dégradations",fields:[["sels_apparents","Sels apparents","y"],["remontees_capillaires","Remontées capillaires suspectées","y"],["enduits_contamines","Enduits et plâtres contaminés","y"],["peinture_ecaillee","Peinture écaillée","y"],["delitement_joints","Délitement des joints","y"],["faiencage","Faïençage de la maçonnerie","y"],["ba13_contamine","BA13 contaminé","y"]]},
+  {id:"humidite",title:"Humidité et eau",fields:[["presence_humidite","Présence d'humidité","y"],["humidite_min","Humidité mesurée – minimum","n","%"],["humidite_max","Humidité mesurée – maximum","n","%"],["humidite_surfacique","Humidité surfacique","y"],["condensation","Condensation","y"],["penetration_eau","Pénétration d'eau","y"],["infiltration_gravitaire","Infiltration gravitaire / pression hydrostatique","y"],["risque_inondation","Risque d'inondation","y"],["defaut_etancheite","Défaut d'étanchéité","y"],["diff_niveau_sol","Différence de niveau de sol","t"]]},
+  {id:"moisissures",title:"Moisissures et ventilation",fields:[["moisissures","Présence de moisissures","y"],["champignons","Présence de champignons","y"],["aspergillus","Présence d'aspergillus","y"],["defaut_ventilation","Défaut de ventilation","y"],["vmc_inoperante","VMC inopérante","y"]]},
+  {id:"structure",title:"Structure",fields:[["fissures_structurelles","Fissures structurelles visibles","y"],["microfissures","Microfissures","y"],["dalle_fissuree","Dalle fissurée","y"],["xylophages","Présence éventuelle de xylophages","y"]]},
+  {id:"mesures",title:"Mesures de laboratoire (si réalisées)",fields:[["nitrates","Nitrates","n","mg/L"],["sulfates","Sulfates","n","mg/L"],["chlorures","Chlorures","n","mg/L"]]},
+  {id:"depose",title:"Dépose préalable",fields:[["chaudiere","Chaudière à déposer","y"],["radiateurs","Radiateurs à déposer","y"],["ballon","Ballon à déposer","y"],["tableau_elec","Tableau électrique à déposer","y"]]},
+  {id:"ampleur",title:"Ampleur du traitement",fields:[["type_traitement","Type de traitement","s",["Traitement complet","Traitement partiel"]]]}
+ ]},
+ {id:"at_toiture",network:"renovation",title:"Diagnostic toiture / façade (Atriome)",match:["toiture","tuile","façade","facade","ravalement","combles","isolation"],sections:[
+  {id:"couverture",title:"Couverture",fields:[["tuiles_cassees","Tuiles cassées ou déplacées","y"],["mousses","Mousses / lichens","y"],["faitage","Faîtage et rives dégradés","y"],["gouttieres","Gouttières / descentes défectueuses","y"],["fuites","Fuites ou traces d'infiltration","y"],["surface","Surface estimée","n","m²"],["pente","Pente","n","%"]]},
+  {id:"charpente",title:"Charpente et isolation",fields:[["charpente","Charpente dégradée","y"],["xylophages","Présence éventuelle de xylophages","y"],["isolation","État de l'isolation sous toiture","s",["Absente","Dégradée","Correcte","Non vérifiée"]]]},
+  {id:"facade",title:"Façade",fields:[["fissures","Fissures visibles","y"],["enduit","Enduit dégradé","y"],["salissures","Salissures / végétation","y"]]}
+ ]},
+ {id:"general",network:"*",title:"Diagnostic général",match:[],sections:[{id:"constat",title:"Constat",fields:[["constat1","Désordre visible","y"],["constat2","Mesure réalisée","y"],["constat3","Cause identifiée","y"]]}]}
+];
+function templatesFor(company,project,all){
+  var txt=((project&&(project.services||[]).join(" "))||(project&&project.service)||"").toLowerCase();
+  var own=DIAG_TEMPLATES.filter(function(t){return t.network===company.network||t.network==="*";});
+  if(all)return own;
+  var m=own.filter(function(t){return t.match.some(function(k){return txt.indexOf(k)>=0;});});
+  return m.length?m:own.filter(function(t){return t.network===company.network});
+}
+function DiagField(props){
+  var f=props.field,a=props.value||{},locked=props.locked,type=f[2];
+  var inp={padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,boxSizing:"border-box",background:locked?"#f5f7fa":"#fff"};
+  function put(p){props.onChange(Object.assign({},a,p));}
+  var body;
+  if(type==="y"){
+    body=React.createElement("div",{style:{display:"flex",gap:5,flexWrap:"wrap"}},["Oui","Non","Non vérifié"].map(function(o){var on=a.v===o,col=o==="Oui"?"#B03A3A":o==="Non"?"#1E6B35":"#6b7684";return React.createElement("button",{key:o,disabled:locked,onClick:function(){put({v:on?null:o});},style:{padding:"5px 12px",borderRadius:999,border:"1px solid "+(on?col:"#d9e0ea"),background:on?col:"#fff",color:on?"#fff":"#4a5565",fontSize:12.5,fontWeight:on?700:500,cursor:locked?"default":"pointer"}},o);}));
+  }else if(type==="n"){
+    body=React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},React.createElement("input",{type:"number",step:"any",disabled:locked,value:a.v==null?"":a.v,onChange:function(e){put({v:e.target.value===""?null:e.target.value});},style:Object.assign({},inp,{width:120})}),React.createElement("span",{style:{fontSize:12.5,color:"#6b7684"}},f[3]||""));
+  }else if(type==="s"){
+    body=React.createElement("select",{disabled:locked,value:a.v||"",onChange:function(e){put({v:e.target.value||null});},style:inp},React.createElement("option",{value:""},"—"),f[3].map(function(o){return React.createElement("option",{key:o,value:o},o);}));
+  }else{
+    body=React.createElement("input",{disabled:locked,value:a.v||"",onChange:function(e){put({v:e.target.value});},style:Object.assign({},inp,{width:"100%"})});
+  }
+  var showC=type!=="t"&&(a.c||a.v==="Oui"||a.cOpen);
+  return React.createElement("div",{style:{padding:"8px 0",borderBottom:"1px solid #f3f5f9"}},
+    React.createElement("div",{style:{fontSize:13,fontWeight:600,color:"#12263f",marginBottom:5}},f[1]),body,
+    showC?React.createElement("input",{disabled:locked,value:a.c||"",placeholder:"Commentaire (lieu, précision…)",onChange:function(e){put({c:e.target.value});},style:Object.assign({},inp,{width:"100%",marginTop:6,fontSize:12.5})})
+    :(!locked&&type!=="t"&&React.createElement("button",{onClick:function(){put({cOpen:true});},style:{border:"none",background:"transparent",color:"#185FA5",fontSize:11.5,cursor:"pointer",padding:"4px 0 0"}},"+ commentaire")));
+}
+
+function StagePhotos(props){
+  var p=props.project,[st,setSt]=useState(p.stage);
+  return React.createElement("div",{style:{marginTop:12,paddingTop:10,borderTop:"1px solid #eef1f6"}},
+    React.createElement("div",{style:{display:"flex",gap:5,flexWrap:"wrap",marginBottom:2}},PROJECT_STAGES.map(function(s){var on=st===s[0];return React.createElement("button",{key:s[0],onClick:function(){setSt(s[0]);},style:{padding:"3px 10px",borderRadius:999,border:"1px solid "+(on?props.net.color:"#e3e8ef"),background:on?props.net.light:"#fff",color:on?props.net.color:"#6b7684",fontSize:11.5,cursor:"pointer",fontWeight:on?700:500}},stageLabel(s[0]));})),
+    React.createElement(PhotoGallery,{key:st,company:props.company,net:props.net,author:props.author,contactId:props.contactId,projectId:p.id,moment:st}));
+}
 /* ===================== FIN PHASE 2 ===================== */
 
 function CompanyView(props){
