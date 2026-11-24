@@ -951,6 +951,7 @@ function LeadPanel(props){
         React.createElement("div",{style:{fontSize:11.5,color:"#9aa4b2",textAlign:"right",marginTop:4}},note.length+" caractère"+(note.length>1?"s":""))),
       React.createElement("div",{style:{padding:"14px 20px",borderTop:"1px solid #e9edf3",background:"#fff",display:"flex",gap:10}},
         React.createElement("button",{onClick:onClose,style:{padding:"12px 18px",borderRadius:12,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer",fontSize:14,color:"#4a5565",fontWeight:500}},"Annuler"),
+        props.onConvert&&React.createElement("button",{onClick:function(){props.onConvert(lead);},style:{padding:"12px 14px",borderRadius:12,border:"1px solid #185FA5",background:"#E6F1FB",cursor:"pointer",fontSize:13.5,color:"#185FA5",fontWeight:600}},"📇 Fiche contact"),
         React.createElement("button",{onClick:save,disabled:saving,style:{flex:1,padding:"12px 18px",borderRadius:12,border:"none",background:changed?"linear-gradient(135deg,#185FA5,#2f7d3a)":"#9db4cc",color:"#fff",fontWeight:700,fontSize:15,cursor:saving?"not-allowed":"pointer",boxShadow:changed?"0 6px 16px rgba(24,95,165,.3)":"none"}},saving?"Enregistrement…":changed?"Enregistrer les modifications":"Enregistrer"))
     )
   );
@@ -1078,10 +1079,227 @@ function CompanyDashboard(props){
   );
 }
 
+/* ===================== PHASE 2 · CONTACTS & PROJETS ===================== */
+var PROJECT_STAGES=[["qualifier","À qualifier"],["rdv","Rendez-vous"],["diagnostic","Diagnostic"],["devis_prepa","Devis en préparation"],["devis_envoye","Devis envoyé"],["accepte","Accepté"],["refuse","Refusé"]];
+var CONTACT_TYPES=[["prospect","Prospect"],["client","Client"],["autre","Autre"]];
+function stageLabel(k){var s=PROJECT_STAGES.find(function(x){return x[0]===k;});return s?s[1]:k;}
+function newId(p){return p+"_"+Date.now()+"_"+Math.random().toString(36).slice(2,7);}
+function contactName(c){return ((c.first_name||"")+" "+(c.last_name||"")).trim()||"Sans nom";}
+function contactInitials(c){var a=(c.first_name||"").trim().charAt(0),b=(c.last_name||"").trim().charAt(0);return ((a+b)||"?").toUpperCase();}
+function fmtDT(iso){if(!iso)return "—";var d=new Date(iso);if(isNaN(d))return "—";return d.toLocaleDateString("fr-FR")+" · "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});}
+async function logActivity(company,author,contactId,projectId,type,desc,details){
+  try{await dbInsertOne("activities",{id:newId("ac"),company_id:company.id,contact_id:contactId||null,project_id:projectId||null,type:type,description:desc,author:author||"",details:details||null});}catch(e){}
+}
+async function findContactForLead(company,lead){
+  var base="company_id=eq."+company.id;
+  var r=await dbSelect("contacts",base+"&lead_id=eq."+encodeURIComponent(lead.id));if(r.length)return r[0];
+  if(lead.email){r=await dbSelect("contacts",base+"&email=ilike."+encodeURIComponent(String(lead.email).trim()));if(r.length)return r[0];}
+  if(lead.phone){r=await dbSelect("contacts",base+"&phone=eq."+encodeURIComponent(String(lead.phone).trim()));if(r.length)return r[0];}
+  return null;
+}
+async function ensureContactFromLead(company,lead,author){
+  var ex=await findContactForLead(company,lead);
+  if(ex)return {contact:ex,created:false};
+  var row={id:newId("ct"),company_id:company.id,lead_id:lead.id,first_name:lead.firstName||null,last_name:lead.lastName||null,email:lead.email?String(lead.email).trim().toLowerCase():null,phone:lead.phone||null,address:lead.address||null,postal_code:lead.zip||null,city:lead.city||null,country:"France",type:"prospect",origin:lead.source||null,notes:lead.message?("Demande initiale : "+lead.message):null,created_by:author||""};
+  await dbInsertOne("contacts",row);
+  await logActivity(company,author,row.id,null,"contact.created","Contact créé depuis un lead"+(lead.source?" ("+lead.source+")":""),{lead_id:lead.id,campaign:lead.campaign||null});
+  return {contact:Object.assign({created_at:new Date().toISOString(),updated_at:new Date().toISOString()},row),created:true};
+}
+
+function ContactsModule(props){
+  var company=props.company,author=props.author,net=NETWORKS[company.network];
+  var [list,setList]=useState(null),[err,setErr]=useState(""),[sel,setSel]=useState(props.openId||null),[q,setQ]=useState(""),[tf,setTf]=useState(""),[creating,setCreating]=useState(false);
+  function load(){return dbSelect("contacts","company_id=eq."+company.id+"&order=created_at.desc").then(function(r){setList(r);}).catch(function(e){setErr(e.message);setList([]);});}
+  useEffect(function(){load();},[company.id]);
+  useEffect(function(){if(props.openId){setSel(props.openId);if(props.onOpened)props.onOpened();}},[props.openId]);
+  var card={background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)"};
+  var shown=useMemo(function(){
+    var s=q.toLowerCase();
+    return (list||[]).filter(function(c){return (!tf||c.type===tf)&&(!s||[c.first_name,c.last_name,c.email,c.phone,c.mobile,c.city,c.postal_code].some(function(v){return (v||"").toLowerCase().includes(s);}));});
+  },[list,q,tf]);
+  var cur=sel&&list?list.find(function(c){return c.id===sel;}):null;
+  if(sel&&list&&!cur){return React.createElement("div",{style:Object.assign({},card,{padding:40,textAlign:"center",color:"#6b7684"})},"Contact introuvable. ",React.createElement("button",{onClick:function(){setSel(null);load();},style:{marginLeft:8,padding:"6px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer"}},"Retour à la liste"));}
+  if(cur){return React.createElement(ContactSheet,{company:company,author:author,contact:cur,net:net,onBack:function(){setSel(null);load();},onChanged:function(u){setList(function(p){return p.map(function(c){return c.id===u.id?u:c;});});}});}
+  if(list===null)return React.createElement("div",{style:{padding:40,textAlign:"center",color:"#6b7684"}},"Chargement…");
+  var inp={padding:"10px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#f8fafc",fontSize:14};
+  return React.createElement("div",null,
+    err&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:10,background:"#FDECEC",color:"#9B2C2C",marginBottom:12,fontSize:13}},"Erreur : "+err),
+    React.createElement("div",{style:Object.assign({},card,{padding:16,marginBottom:16,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"})},
+      React.createElement("input",{value:q,onChange:function(e){setQ(e.target.value);},placeholder:"🔍  Rechercher un contact (nom, téléphone, e-mail, ville…)",style:Object.assign({},inp,{flex:"2 1 260px"})}),
+      React.createElement("select",{value:tf,onChange:function(e){setTf(e.target.value);},style:inp},React.createElement("option",{value:""},"Tous les types"),CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);})),
+      React.createElement("button",{onClick:function(){setCreating(true);},style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau contact")),
+    creating&&React.createElement(NewContactForm,{company:company,author:author,net:net,onCancel:function(){setCreating(false);},onCreated:function(c){setCreating(false);setList(function(p){return [c].concat(p||[]);});setSel(c.id);}}),
+    list.length===0
+      ?React.createElement("div",{style:Object.assign({},card,{padding:50,textAlign:"center",color:"#6b7684"})},React.createElement("div",{style:{fontSize:34,marginBottom:8}},"📇"),React.createElement("div",{style:{fontWeight:600,color:"#12263f",marginBottom:4}},"Aucun contact pour le moment"),React.createElement("div",{style:{fontSize:13}},"Ouvrez un lead et cliquez sur « Fiche contact », ou créez un contact manuellement."))
+      :React.createElement("div",{style:Object.assign({},card,{overflowX:"auto"})},React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
+        React.createElement("thead",null,React.createElement("tr",null,["Contact","Type","Téléphone","E-mail","CP / Ville","Origine","Créé le"].map(function(h){return React.createElement("th",{key:h,style:{padding:"11px 14px",textAlign:"left",fontSize:11}},h);}))),
+        React.createElement("tbody",null,shown.map(function(c){
+          return React.createElement("tr",{key:c.id,onClick:function(){setSel(c.id);},style:{borderTop:"1px solid #eef1f6",cursor:"pointer"}},
+            React.createElement("td",{style:{padding:"12px 14px"}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},React.createElement("div",{style:{width:34,height:34,borderRadius:"50%",background:net.light,color:net.color,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12}},contactInitials(c)),React.createElement("b",{style:{fontSize:13.5}},contactName(c)))),
+            React.createElement("td",{style:{padding:"12px 14px"}},React.createElement("span",{style:{fontSize:11.5,fontWeight:600,padding:"2px 10px",borderRadius:999,background:c.type==="client"?"#E3F6E8":c.type==="prospect"?"#E6F1FB":"#F0F0F0",color:c.type==="client"?"#1E6B35":c.type==="prospect"?"#185FA5":"#555"}},(CONTACT_TYPES.find(function(t){return t[0]===c.type;})||["","—"])[1])),
+            React.createElement("td",{style:{padding:"12px 14px",fontSize:13}},c.phone||c.mobile||"—"),
+            React.createElement("td",{style:{padding:"12px 14px",fontSize:13}},c.email||"—"),
+            React.createElement("td",{style:{padding:"12px 14px",fontSize:13}},((c.postal_code||"")+" "+(c.city||"")).trim()||"—"),
+            React.createElement("td",{style:{padding:"12px 14px"}},c.origin?React.createElement(SourceBadge,{source:c.origin}):"—"),
+            React.createElement("td",{style:{padding:"12px 14px",fontSize:12.5,color:"#6b7684",whiteSpace:"nowrap"}},fmtDT(c.created_at)));
+        })))));
+}
+
+function NewContactForm(props){
+  var company=props.company,author=props.author,net=props.net;
+  var [f,setF]=useState({civility:"",first_name:"",last_name:"",email:"",phone:"",city:"",postal_code:"",type:"prospect"}),[busy,setBusy]=useState(false),[msg,setMsg]=useState("");
+  function set(k,v){setF(function(p){var n=Object.assign({},p);n[k]=v;return n;});}
+  var inp={padding:"10px 12px",borderRadius:10,border:"1px solid #d9e0ea",fontSize:14,width:"100%",boxSizing:"border-box"};
+  async function save(){
+    if(!f.last_name.trim()&&!f.first_name.trim()){setMsg("Renseignez au moins un nom ou un prénom.");return;}
+    setBusy(true);setMsg("");
+    try{
+      var dup=null;
+      if(f.email.trim()){var r=await dbSelect("contacts","company_id=eq."+company.id+"&email=ilike."+encodeURIComponent(f.email.trim()));if(r.length)dup=r[0];}
+      if(!dup&&f.phone.trim()){var r2=await dbSelect("contacts","company_id=eq."+company.id+"&phone=eq."+encodeURIComponent(f.phone.trim()));if(r2.length)dup=r2[0];}
+      if(dup){setMsg("Ce contact existe déjà : "+contactName(dup)+" (même e-mail ou téléphone).");setBusy(false);return;}
+      var row={id:newId("ct"),company_id:company.id,civility:f.civility||null,first_name:f.first_name.trim()||null,last_name:f.last_name.trim()||null,email:f.email.trim().toLowerCase()||null,phone:f.phone.trim()||null,city:f.city.trim()||null,postal_code:f.postal_code.trim()||null,country:"France",type:f.type,origin:"Saisie manuelle",created_by:author||""};
+      await dbInsertOne("contacts",row);
+      await logActivity(company,author,row.id,null,"contact.created","Contact créé manuellement",null);
+      props.onCreated(Object.assign({created_at:new Date().toISOString(),updated_at:new Date().toISOString()},row));
+    }catch(e){setMsg("Erreur : "+e.message);setBusy(false);}
+  }
+  return React.createElement("div",{style:{background:"#fff",borderRadius:16,border:"1px solid "+net.color,boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:18,marginBottom:16}},
+    React.createElement("div",{style:{fontWeight:700,fontSize:15,marginBottom:12,color:"#12263f"}},"Nouveau contact"),
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,marginBottom:12}},
+      React.createElement("select",{value:f.civility,onChange:function(e){set("civility",e.target.value);},style:inp},React.createElement("option",{value:""},"Civilité"),["M.","Mme"].map(function(c){return React.createElement("option",{key:c,value:c},c);})),
+      React.createElement("input",{placeholder:"Prénom",value:f.first_name,onChange:function(e){set("first_name",e.target.value);},style:inp}),
+      React.createElement("input",{placeholder:"Nom",value:f.last_name,onChange:function(e){set("last_name",e.target.value);},style:inp}),
+      React.createElement("input",{placeholder:"E-mail",value:f.email,onChange:function(e){set("email",e.target.value);},style:inp}),
+      React.createElement("input",{placeholder:"Téléphone",value:f.phone,onChange:function(e){set("phone",e.target.value);},style:inp}),
+      React.createElement("input",{placeholder:"Code postal",value:f.postal_code,onChange:function(e){set("postal_code",e.target.value);},style:inp}),
+      React.createElement("input",{placeholder:"Ville",value:f.city,onChange:function(e){set("city",e.target.value);},style:inp}),
+      React.createElement("select",{value:f.type,onChange:function(e){set("type",e.target.value);},style:inp},CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);}))),
+    msg&&React.createElement("div",{style:{padding:"9px 12px",borderRadius:10,background:"#FDECEC",color:"#9B2C2C",fontSize:13,marginBottom:10}},msg),
+    React.createElement("div",{style:{display:"flex",gap:8}},
+      React.createElement("button",{onClick:props.onCancel,style:{padding:"10px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),
+      React.createElement("button",{onClick:save,disabled:busy,style:{padding:"10px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:busy?"wait":"pointer"}},busy?"Enregistrement…":"Créer le contact")));
+}
+
+var CONTACT_FIELDS=[["civility","Civilité"],["first_name","Prénom"],["last_name","Nom"],["type","Type"],["origin","Origine"],["accounting_code","Code comptable"],["email","E-mail"],["phone","Téléphone fixe"],["mobile","Mobile"],["address","Adresse"],["postal_code","Code postal"],["city","Ville"],["country","Pays"]];
+
+function ContactSheet(props){
+  var company=props.company,author=props.author,c=props.contact,net=props.net;
+  var [tab,setTab]=useState("overview"),[edit,setEdit]=useState(false),[form,setForm]=useState(c),[busy,setBusy]=useState(false),[msg,setMsg]=useState(null);
+  var [projects,setProjects]=useState(null),[acts,setActs]=useState(null),[actF,setActF]=useState("tout"),[comment,setComment]=useState("");
+  var [np,setNp]=useState(null),[openP,setOpenP]=useState(null),[note,setNote]=useState(c.notes||""),[noteBusy,setNoteBusy]=useState(false);
+  function loadP(){return dbSelect("projects","contact_id=eq."+c.id+"&order=created_at.desc").then(setProjects).catch(function(e){setProjects([]);setMsg({t:"err",x:e.message});});}
+  function loadA(){return dbSelect("activities","contact_id=eq."+c.id+"&order=created_at.desc").then(setActs).catch(function(){setActs([]);});}
+  useEffect(function(){loadP();loadA();},[c.id]);
+  var card={background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)",padding:18};
+  var inp={padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,width:"100%",boxSizing:"border-box"};
+  async function saveEdit(){
+    setBusy(true);setMsg(null);
+    try{
+      var patch={},changes={};
+      CONTACT_FIELDS.forEach(function(p){var k=p[0],nv=(form[k]===undefined?"":form[k])||null,ov=c[k]||null;if(nv!==ov){patch[k]=nv;changes[k]={avant:ov,apres:nv};}});
+      if(Object.keys(patch).length===0){setEdit(false);setBusy(false);return;}
+      if(patch.email)patch.email=String(patch.email).trim().toLowerCase();
+      patch.updated_at=new Date().toISOString();
+      await dbUpdate("contacts","id=eq."+c.id,patch);
+      await logActivity(company,author,c.id,null,"contact.updated","Fiche contact modifiée ("+Object.keys(changes).length+" champ"+(Object.keys(changes).length>1?"s":"")+")",changes);
+      props.onChanged(Object.assign({},c,patch));setEdit(false);setMsg({t:"ok",x:"Fiche enregistrée."});loadA();
+    }catch(e){setMsg({t:"err",x:e.message});}
+    setBusy(false);
+  }
+  async function saveNote(){
+    setNoteBusy(true);
+    try{await dbUpdate("contacts","id=eq."+c.id,{notes:note||null,updated_at:new Date().toISOString()});await logActivity(company,author,c.id,null,"contact.updated","Notes internes modifiées",null);props.onChanged(Object.assign({},c,{notes:note||null}));loadA();setMsg({t:"ok",x:"Notes enregistrées."});}catch(e){setMsg({t:"err",x:e.message});}
+    setNoteBusy(false);
+  }
+  async function createProject(){
+    if(!np.title.trim()){setMsg({t:"err",x:"Donnez un titre au projet."});return;}
+    setBusy(true);
+    try{
+      var row={id:newId("pr"),company_id:company.id,contact_id:c.id,title:np.title.trim(),service:np.service.trim()||null,site_address:np.site_address.trim()||(c.address?(c.address+" "+(c.postal_code||"")+" "+(c.city||"")).trim():null),stage:"qualifier",due_date:np.due_date||null,description:np.description.trim()||null,created_by:author||""};
+      await dbInsertOne("projects",row);
+      await logActivity(company,author,c.id,row.id,"project.created","Projet créé : "+row.title,null);
+      setNp(null);await loadP();await loadA();setTab("projects");setMsg({t:"ok",x:"Projet créé."});
+    }catch(e){setMsg({t:"err",x:e.message});}
+    setBusy(false);
+  }
+  async function setStage(p,st){
+    if(p.stage===st)return;
+    try{await dbUpdate("projects","id=eq."+p.id,{stage:st,updated_at:new Date().toISOString()});await logActivity(company,author,c.id,p.id,"project.stage_changed","Projet « "+p.title+" » : "+stageLabel(p.stage)+" → "+stageLabel(st),{avant:p.stage,apres:st});await loadP();await loadA();}
+    catch(e){setMsg({t:"err",x:e.message});}
+  }
+  async function addComment(){
+    if(!comment.trim())return;
+    await logActivity(company,author,c.id,null,"comment",comment.trim(),null);setComment("");await loadA();
+  }
+  var kind=function(t){return t==="comment"?"comment":t.indexOf("project")===0?"project":"change";};
+  var filteredActs=(acts||[]).filter(function(a){return actF==="tout"||kind(a.type)===actF;});
+  var actIcon=function(t){return t==="comment"?"💬":t.indexOf("project")===0?"📁":t==="contact.created"?"✨":"✏️";};
+  var tabs=[["overview","Vue d'ensemble"],["projects","Projets"+(projects?" ("+projects.length+")":"")],["diag","Diagnostics"],["quotes","Devis"],["invoices","Factures"],["history","Historique"]];
+  var soon={diag:"Module diagnostic · prochaine étape (Phase 3).",quotes:"Création et suivi des devis · à venir (Phase 5).",invoices:"Facturation · à venir (Phase 6)."};
+  function infoRow(k,label){var v=c[k];var t=k==="type"?(CONTACT_TYPES.find(function(x){return x[0]===v;})||["","—"])[1]:v;return React.createElement("div",{key:k,style:{display:"flex",gap:10,padding:"6px 0",fontSize:13.5,borderBottom:"1px solid #f3f5f9"}},React.createElement("span",{style:{width:120,color:"#6b7684",flexShrink:0}},label),React.createElement("span",{style:{fontWeight:500,wordBreak:"break-word"}},t||"—"));}
+  function projectStepper(p){return React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",margin:"10px 0"}},PROJECT_STAGES.map(function(s,i){var on=p.stage===s[0];return React.createElement("button",{key:s[0],onClick:function(){setStage(p,s[0]);},title:"Passer à : "+s[1],style:{padding:"5px 11px",borderRadius:999,border:"1px solid "+(on?net.color:"#e3e8ef"),background:on?net.light:"#fff",color:on?net.color:"#6b7684",fontWeight:on?700:500,fontSize:12,cursor:"pointer"}},(i+1)+". "+s[1]);}));}
+  return React.createElement("div",null,
+    React.createElement("button",{onClick:props.onBack,style:{border:"none",background:"transparent",color:net.color,cursor:"pointer",fontSize:14,fontWeight:600,marginBottom:12,padding:0}},"← Contacts"),
+    React.createElement("div",{style:Object.assign({},card,{display:"flex",gap:16,flexWrap:"wrap",alignItems:"center",marginBottom:16})},
+      React.createElement("div",{style:{width:64,height:64,borderRadius:"50%",background:net.light,color:net.color,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:22}},contactInitials(c)),
+      React.createElement("div",{style:{flex:"1 1 260px",minWidth:0}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},React.createElement("span",{style:{fontSize:22,fontWeight:700,color:"#12263f"}},((c.civility?c.civility+" ":"")+contactName(c))),React.createElement("span",{style:{fontSize:12,fontWeight:600,padding:"2px 11px",borderRadius:999,background:c.type==="client"?"#E3F6E8":"#E6F1FB",color:c.type==="client"?"#1E6B35":"#185FA5"}},(CONTACT_TYPES.find(function(t){return t[0]===c.type;})||["","—"])[1])),
+        React.createElement("div",{style:{fontSize:13.5,color:"#4a5565",marginTop:6,display:"flex",gap:16,flexWrap:"wrap"}},
+          c.email&&React.createElement("a",{href:"mailto:"+c.email,style:{color:"inherit",textDecoration:"none"}},"✉️ "+c.email),
+          (c.phone||c.mobile)&&React.createElement("a",{href:"tel:"+(c.mobile||c.phone),style:{color:"inherit",textDecoration:"none"}},"📞 "+(c.mobile||c.phone)),
+          (c.address||c.city)&&React.createElement("span",null,"📍 "+[c.address,c.postal_code,c.city].filter(Boolean).join(", ")))),
+      React.createElement("div",{style:{display:"flex",gap:10}},[["Projets",projects?projects.length:"…"],["Actions",acts?acts.length:"…"]].map(function(k){return React.createElement("div",{key:k[0],style:{textAlign:"center",padding:"10px 20px",borderRadius:14,border:"1px solid #eef1f6",background:"#f8fafc"}},React.createElement("div",{style:{fontSize:22,fontWeight:700,color:"#12263f"}},k[1]),React.createElement("div",{style:{fontSize:12,color:"#6b7684"}},k[0]));})),
+      React.createElement("button",{onClick:function(){setNp({title:"",service:"",site_address:"",due_date:"",description:""});setTab("projects");},style:{padding:"11px 20px",borderRadius:12,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau projet")),
+    React.createElement("div",{style:{display:"flex",gap:4,borderBottom:"1px solid #e3e8ef",marginBottom:16,overflowX:"auto"}},tabs.map(function(t){var on=tab===t[0],dis=!!soon[t[0]];return React.createElement("button",{key:t[0],onClick:function(){setTab(t[0]);},style:{padding:"11px 18px",border:"none",background:"transparent",borderBottom:on?"3px solid "+net.color:"3px solid transparent",color:on?net.color:dis?"#9aa4b2":"#4a5565",fontWeight:on?700:500,fontSize:14,cursor:"pointer",whiteSpace:"nowrap"}},t[1]);})),
+    msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:10,background:msg.t==="ok"?"#E8F6EC":"#FDECEC",color:msg.t==="ok"?"#1E6B35":"#9B2C2C",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},React.createElement("span",null,msg.x),React.createElement("button",{onClick:function(){setMsg(null);},style:{border:"none",background:"transparent",cursor:"pointer",color:"inherit"}},"✕")),
+    soon[tab]&&React.createElement("div",{style:Object.assign({},card,{padding:50,textAlign:"center",color:"#6b7684"})},React.createElement("div",{style:{fontSize:30,marginBottom:8}},"🚧"),soon[tab]),
+    tab==="overview"&&React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:16,alignItems:"start"}},
+      React.createElement("div",{style:card},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},React.createElement("b",{style:{fontSize:15}},"Informations contact"),edit?null:React.createElement("button",{onClick:function(){setForm(c);setEdit(true);},style:{border:"none",background:"transparent",color:net.color,fontWeight:600,cursor:"pointer",fontSize:13}},"Modifier")),
+        edit
+          ?React.createElement("div",null,CONTACT_FIELDS.map(function(p){var k=p[0];return React.createElement("div",{key:k,style:{marginBottom:8}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase",letterSpacing:.3}},p[1]),k==="type"?React.createElement("select",{value:form.type||"prospect",onChange:function(e){setForm(Object.assign({},form,{type:e.target.value}));},style:inp},CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);})):React.createElement("input",{value:form[k]||"",onChange:function(e){var n=Object.assign({},form);n[k]=e.target.value;setForm(n);},style:inp}));}),
+            React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},React.createElement("button",{onClick:function(){setEdit(false);},style:{padding:"9px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:saveEdit,disabled:busy,style:{padding:"9px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")))
+          :React.createElement("div",null,CONTACT_FIELDS.map(function(p){return infoRow(p[0],p[1]);}))),
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+        React.createElement("div",{style:card},React.createElement("b",{style:{fontSize:15,display:"block",marginBottom:10}},"Projets"),
+          projects===null?"Chargement…":projects.length===0?React.createElement("div",{style:{color:"#9aa4b2",fontSize:13}},"Aucun projet pour ce contact."):projects.slice(0,3).map(function(p){return React.createElement("div",{key:p.id,onClick:function(){setTab("projects");setOpenP(p.id);},style:{padding:"9px 0",borderBottom:"1px solid #f3f5f9",cursor:"pointer"}},React.createElement("div",{style:{fontWeight:600,fontSize:14}},p.title),React.createElement("div",{style:{fontSize:12,color:"#6b7684"}},(p.reference||"")+" · "+stageLabel(p.stage)));})),
+        React.createElement("div",{style:card},React.createElement("b",{style:{fontSize:15,display:"block",marginBottom:10}},"Notes internes"),
+          React.createElement("textarea",{value:note,onChange:function(e){setNote(e.target.value);},rows:4,placeholder:"Informations utiles sur ce contact…",style:Object.assign({},inp,{resize:"vertical",fontFamily:"inherit"})}),
+          React.createElement("div",{style:{textAlign:"right",marginTop:8}},React.createElement("button",{onClick:saveNote,disabled:noteBusy||note===(c.notes||""),style:{padding:"8px 18px",borderRadius:10,border:"none",background:note===(c.notes||"")?"#c9d4e2":net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},"Enregistrer"))),
+        React.createElement("div",{style:card},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:10}},React.createElement("b",{style:{fontSize:15}},"Dernières actions"),React.createElement("button",{onClick:function(){setTab("history");},style:{border:"none",background:"transparent",color:net.color,cursor:"pointer",fontWeight:600,fontSize:13}},"Tout voir")),
+          acts===null?"Chargement…":acts.length===0?React.createElement("div",{style:{color:"#9aa4b2",fontSize:13}},"Aucune action enregistrée."):acts.slice(0,5).map(function(a){return React.createElement("div",{key:a.id,style:{padding:"7px 0",borderBottom:"1px solid #f3f5f9",fontSize:13}},React.createElement("div",null,actIcon(a.type)+" "+a.description),React.createElement("div",{style:{fontSize:11.5,color:"#9aa4b2"}},fmtDT(a.created_at)+(a.author?" · "+a.author:"")));})))),
+    tab==="projects"&&React.createElement("div",null,
+      np&&React.createElement("div",{style:Object.assign({},card,{marginBottom:16,border:"1px solid "+net.color})},React.createElement("b",{style:{fontSize:15,display:"block",marginBottom:12}},"Nouveau projet"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:10}},
+          React.createElement("input",{placeholder:"Titre du projet (ex : Traitement façade)",value:np.title,onChange:function(e){setNp(Object.assign({},np,{title:e.target.value}));},style:inp}),
+          React.createElement("input",{placeholder:"Prestation concernée",value:np.service,onChange:function(e){setNp(Object.assign({},np,{service:e.target.value}));},style:inp}),
+          React.createElement("input",{placeholder:"Adresse du chantier (par défaut : adresse du contact)",value:np.site_address,onChange:function(e){setNp(Object.assign({},np,{site_address:e.target.value}));},style:inp}),
+          React.createElement("input",{type:"date",value:np.due_date,onChange:function(e){setNp(Object.assign({},np,{due_date:e.target.value}));},style:inp})),
+        React.createElement("textarea",{placeholder:"Description du besoin / de l'habitation",value:np.description,onChange:function(e){setNp(Object.assign({},np,{description:e.target.value}));},rows:3,style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
+        React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setNp(null);},style:{padding:"9px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:createProject,disabled:busy,style:{padding:"9px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Créer le projet"))),
+      projects===null?React.createElement("div",{style:{padding:30,textAlign:"center",color:"#6b7684"}},"Chargement…")
+      :projects.length===0&&!np?React.createElement("div",{style:Object.assign({},card,{padding:40,textAlign:"center",color:"#6b7684"})},"Aucun projet. Cliquez sur « + Nouveau projet » pour en créer un.")
+      :projects.map(function(p){var open=openP===p.id;return React.createElement("div",{key:p.id,style:Object.assign({},card,{marginBottom:12})},
+        React.createElement("div",{onClick:function(){setOpenP(open?null:p.id);},style:{display:"flex",justifyContent:"space-between",gap:10,cursor:"pointer",flexWrap:"wrap"}},
+          React.createElement("div",null,React.createElement("div",{style:{fontWeight:700,fontSize:15}},p.title),React.createElement("div",{style:{fontSize:12.5,color:"#6b7684",marginTop:2}},(p.reference||"")+(p.service?" · "+p.service:"")+" · créé le "+fmtDT(p.created_at))),
+          React.createElement("span",{style:{alignSelf:"flex-start",fontSize:12,fontWeight:600,padding:"3px 12px",borderRadius:999,background:p.stage==="accepte"?"#E3F6E8":p.stage==="refuse"?"#FCEBEB":net.light,color:p.stage==="accepte"?"#1E6B35":p.stage==="refuse"?"#9B2C2C":net.color}},stageLabel(p.stage))),
+        open&&React.createElement("div",{style:{marginTop:8}},projectStepper(p),
+          p.site_address&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"📍 Chantier : "+p.site_address),
+          p.due_date&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"🗓️ Échéance : "+new Date(p.due_date).toLocaleDateString("fr-FR")),
+          p.description&&React.createElement("div",{style:{fontSize:13.5,marginTop:8,padding:"10px 12px",background:"#f8fafc",borderRadius:10}},p.description)));})),
+    tab==="history"&&React.createElement("div",{style:card},
+      React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}},[["tout","Tout"],["comment","Commentaires"],["change","Modifications"],["project","Projets"]].map(function(f){var on=actF===f[0];return React.createElement("button",{key:f[0],onClick:function(){setActF(f[0]);},style:{padding:"6px 14px",borderRadius:999,border:"1px solid "+(on?net.color:"#e3e8ef"),background:on?net.light:"#fff",color:on?net.color:"#4a5565",fontWeight:on?600:500,fontSize:13,cursor:"pointer"}},f[1]);})),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14}},React.createElement("input",{value:comment,onChange:function(e){setComment(e.target.value);},onKeyDown:function(e){if(e.key==="Enter")addComment();},placeholder:"Ajouter un commentaire…",style:Object.assign({},inp,{flex:1})}),React.createElement("button",{onClick:addComment,disabled:!comment.trim(),style:{padding:"8px 18px",borderRadius:10,border:"none",background:comment.trim()?net.color:"#c9d4e2",color:"#fff",fontWeight:600,cursor:"pointer"}},"Ajouter")),
+      acts===null?"Chargement…":filteredActs.length===0?React.createElement("div",{style:{color:"#9aa4b2",fontSize:13,padding:20,textAlign:"center"}},"Aucune action."):filteredActs.map(function(a){return React.createElement("div",{key:a.id,style:{display:"flex",gap:12,padding:"10px 0",borderBottom:"1px solid #f3f5f9"}},React.createElement("div",{style:{fontSize:18}},actIcon(a.type)),React.createElement("div",{style:{flex:1,minWidth:0}},React.createElement("div",{style:{fontSize:14,wordBreak:"break-word"}},a.description),React.createElement("div",{style:{fontSize:12,color:"#9aa4b2",marginTop:2}},fmtDT(a.created_at)+(a.author?" · "+a.author:""))));})));
+}
+/* ===================== FIN PHASE 2 ===================== */
+
 function CompanyView(props){
   var company=props.company,leads=props.leads,setLeads=props.setLeads,onLogout=props.onLogout,companies=props.companies||INIT_COMPANIES;
   var net=NETWORKS[company.network],statuses=getStatuses(company.id);
-  var [activeTab,setActiveTab]=useState("dashboard"),[navOpen,setNavOpen]=useState(false);
+  var [activeTab,setActiveTab]=useState("dashboard"),[navOpen,setNavOpen]=useState(false),[openContact,setOpenContact]=useState(null);
+  async function convertLead(l){try{var r=await ensureContactFromLead(company,l,company.name);setPanel(null);setOpenContact(r.contact.id);setActiveTab("contacts");}catch(e){alert("Erreur : "+e.message);}}
   var [filter,setFilter]=useState("tous"),[search,setSearch]=useState("");
   var [dateFrom,setDateFrom]=useState(""),[dateTo,setDateTo]=useState("");
   var [panel,setPanel]=useState(null),[groupByDept,setGroupByDept]=useState(false);
@@ -1128,7 +1346,7 @@ function CompanyView(props){
   var pill=function(active,color,bg){return{padding:"7px 15px",borderRadius:999,border:"1px solid "+(active?color:"#e3e8ef"),background:active?bg:"#fff",color:active?color:"#5b6573",fontSize:13,cursor:"pointer",fontWeight:active?600:400,transition:"all .15s"};};
   var ghost={padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500};
   var initials=company.name.replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase();
-  var navItems=[["dashboard","🏠","Tableau de bord"],["leads","👥","Mes leads"],["ca","💶","CA Facturé"],["stats","📊","Source de contacts"]];
+  var navItems=[["dashboard","🏠","Tableau de bord"],["leads","👥","Mes leads"],["ca","💶","CA Facturé"],["contacts","📇","Contacts"],["stats","📊","Source de contacts"]];
   var curNav=navItems.find(function(t){return t[0]===activeTab;})||navItems[0];
   var ghost2={padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500};
   return React.createElement("div",{style:{minHeight:"100vh",display:"flex",background:"linear-gradient(180deg,#eef3fa 0%,#f7f9fc 40%)",fontSize:14,color:"#1a2433"}},
@@ -1145,6 +1363,7 @@ function CompanyView(props){
           React.createElement("div",{title:company.name,style:{width:38,height:38,borderRadius:"50%",background:net.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}},initials))),
       React.createElement("div",{className:"dl-admin",style:{maxWidth:1500,margin:"0 auto",padding:"22px 24px 40px"}},
       activeTab==="dashboard"&&React.createElement(CompanyDashboard,{company:company,net:net,myLeads:myLeads,go:setActiveTab,onOpen:function(l){setPanel(l);}}),
+      activeTab==="contacts"&&React.createElement(ContactsModule,{company:company,author:company.name,openId:openContact,onOpened:function(){setOpenContact(null);}}),
       React.createElement("div",{style:{display:activeTab==="ca"?"block":"none"}},React.createElement(CAView,{company:company,companies:companies})),
       React.createElement("div",{style:{display:activeTab==="stats"?"block":"none"}},React.createElement(LeadsStatsView,{company:company,net:net})),
       activeTab==="leads"&&React.createElement("div",null,
@@ -1167,7 +1386,7 @@ function CompanyView(props){
       )
       )
     ),
-    panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:company.id,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
+    panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:company.id,onConvert:convertLead,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
   );
 }
 
@@ -1733,7 +1952,7 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
     var [commerciaux,setCommerciaux]=useState([]);var [loading,setLoading]=useState(true);
     var [tab,setTab]=useState("dashboard"),[navOpen,setNavOpen]=useState(false);
     var [selected,setSelected]=useState({});var [assignTarget,setAssignTarget]=useState("");var [assigning,setAssigning]=useState(false);
-    var [msg,setMsg]=useState(null);var [panel,setPanel]=useState(null);
+    var [msg,setMsg]=useState(null);var [panel,setPanel]=useState(null);var [openContact,setOpenContact]=useState(null);
     var [filter,setFilter]=useState("tous");var [search,setSearch]=useState("");
     var [sortDesc,setSortDesc]=useState(true);var [page,setPage]=useState(1);
     var [dateFrom,setDateFrom]=useState("");var [dateTo,setDateTo]=useState("");var [groupByDept,setGroupByDept]=useState(false);
@@ -1787,8 +2006,9 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
     }
     async function saveLeadUpdate(id,status,note){await dbUpdate("leads","id=eq."+id,{status:status,note:note});setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});}
     if(loading)return React.createElement("div",{style:{padding:40,textAlign:"center"}},"Chargement…");
-    var navItems=[["dashboard","🏠","Tableau de bord"],["leads","👥","Leads"],["ca","💶","CA Facturé"],["stats","📊","Source de contacts"],["commerciaux","🧑‍💼","Commerciaux"]];
+    var navItems=[["dashboard","🏠","Tableau de bord"],["leads","👥","Leads"],["ca","💶","CA Facturé"],["contacts","📇","Contacts"],["stats","📊","Source de contacts"],["commerciaux","🧑‍💼","Commerciaux"]];
     var coObj={id:companyId,name:companyName,network:network};
+    async function convertLead(l){try{var r=await ensureContactFromLead(coObj,l,companyName+" (admin)");setPanel(null);setOpenContact(r.contact.id);setTab("contacts");}catch(e){alert("Erreur : "+e.message);}}
     var ghost2={padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500};
     return React.createElement("div",{style:{minHeight:"100vh",display:"flex",background:"linear-gradient(180deg,#eef3fa 0%,#f7f9fc 40%)",fontSize:14,color:"#1a2433"}},
       React.createElement("style",null,DOFE_CSS+ADMIN_THEME_CSS+SIDEBAR_CSS),
@@ -1830,6 +2050,7 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
           !groupByDept&&React.createElement(Pagination,{page:page,total:shown.length,pageSize:PAGE_SIZE,onChange:function(p){setPage(p);window.scrollTo(0,0);},color:net.color})
         ),
         React.createElement("div",{style:{display:tab==="ca"?"block":"none"}},React.createElement(CAView,{company:{id:companyId,name:companyName,network:network},companies:companies||INIT_COMPANIES})),
+        tab==="contacts"&&React.createElement(ContactsModule,{company:coObj,author:companyName+" (admin)",openId:openContact,onOpened:function(){setOpenContact(null);}}),
         tab==="stats"&&React.createElement(LeadsStatsView,{company:{id:companyId,name:companyName,network:network},net:net}),
         tab==="commerciaux"&&React.createElement("div",null,
           React.createElement("div",{style:{background:"var(--color-background-primary)",borderRadius:10,border:"1px solid var(--color-border-tertiary)",padding:20,marginBottom:16}},
@@ -1849,7 +2070,7 @@ function makeSubAdminView(companyId,companyName,network,tableName,dbTable){
         )
       )
       ),
-      panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:companyId,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
+      panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:companyId,onConvert:convertLead,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
     );
   };
 }
@@ -1863,14 +2084,15 @@ function makeSubCommercialView(companyId,companyName,network,dbTable){
   return function(props){
     var commercial=props.commercial,leads=props.leads,setLeads=props.setLeads,onLogout=props.onLogout;
     var net=NETWORKS[network];
-    var [panel,setPanel]=useState(null);var [ctab,setCtab]=useState("dashboard"),[cnav,setCnav]=useState(false);var [filter,setFilter]=useState("tous");var [search,setSearch]=useState("");var [sortDesc,setSortDesc]=useState(true);var [page,setPage]=useState(1);
+    var [openContact,setOpenContact]=useState(null);var [panel,setPanel]=useState(null);var [ctab,setCtab]=useState("dashboard"),[cnav,setCnav]=useState(false);var [filter,setFilter]=useState("tous");var [search,setSearch]=useState("");var [sortDesc,setSortDesc]=useState(true);var [page,setPage]=useState(1);
     var myLeads=useMemo(function(){return leads.filter(function(l){return l.companyId===companyId&&l.assignedTo===commercial.id;});},[leads,commercial.id]);
     var shown=useMemo(function(){var filtered=myLeads.filter(function(l){var matchStatus=filter==="spam"?l.status==="spam":filter==="tous"?l.status!=="spam":l.status===filter;var q=search.toLowerCase();var matchSearch=!q||[l.firstName,l.lastName,l.email,l.phone,l.city,l.campaign].some(function(v){return(v||"").toLowerCase().includes(q);});return matchStatus&&matchSearch;});filtered.sort(function(a,b){var da=parseLeadDate(a.importedAt)||new Date(0),db=parseLeadDate(b.importedAt)||new Date(0);return sortDesc?db-da:da-db;});return filtered;},[myLeads,filter,search,sortDesc]);
     var counts=useMemo(function(){var r={tous:myLeads.filter(function(l){return l.status!=="spam";}).length};STATUSES.forEach(function(s){r[s.key]=myLeads.filter(function(l){return l.status===s.key;}).length;});return r;},[myLeads]);
     var paginated=shown.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
     async function saveLeadUpdate(id,status,note){await dbUpdate("leads","id=eq."+id,{status:status,note:note});setLeads(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{status:status,note:note}):l;});});}
-    var navItems=[["dashboard","🏠","Tableau de bord"],["leads","👥","Mes leads"]];
+    var navItems=[["dashboard","🏠","Tableau de bord"],["leads","👥","Mes leads"],["contacts","📇","Contacts"]];
     var coObj={id:companyId,name:companyName,network:network};
+    async function convertLead(l){try{var r=await ensureContactFromLead(coObj,l,commercial.nom);setPanel(null);setOpenContact(r.contact.id);setCtab("contacts");}catch(e){alert("Erreur : "+e.message);}}
     var ghost2={padding:"8px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer",fontSize:13,color:"#4a5565",fontWeight:500};
     return React.createElement("div",{style:{minHeight:"100vh",display:"flex",background:"linear-gradient(180deg,#eef3fa 0%,#f7f9fc 40%)",fontSize:14,color:"#1a2433"}},
       React.createElement("style",null,DOFE_CSS+ADMIN_THEME_CSS+SIDEBAR_CSS),
@@ -1885,6 +2107,7 @@ function makeSubCommercialView(companyId,companyName,network,dbTable){
           React.createElement("div",{style:{width:38,height:38,borderRadius:"50%",background:net.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}},commercial.nom.replace(/[^A-Za-z0-9]/g,"").slice(0,2).toUpperCase()))),
       React.createElement("div",{className:"dl-admin",style:{padding:"22px 24px 40px",maxWidth:1500,margin:"0 auto"}},
         ctab==="dashboard"&&React.createElement(CompanyDashboard,{company:coObj,net:net,myLeads:myLeads,hideCa:true,go:setCtab,onOpen:function(l){setPanel(l);}}),
+        ctab==="contacts"&&React.createElement(ContactsModule,{company:coObj,author:commercial.nom,openId:openContact,onOpened:function(){setOpenContact(null);}}),
         ctab==="leads"&&React.createElement("div",null,
         React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
           React.createElement("button",{onClick:function(){setFilter("tous");},style:{padding:"6px 14px",borderRadius:8,border:"1px solid "+(filter==="tous"?net.color:"var(--color-border-secondary)"),background:filter==="tous"?net.light:"transparent",color:filter==="tous"?net.color:"var(--color-text-secondary)",fontSize:13,cursor:"pointer",fontWeight:filter==="tous"?500:400}},"Tous ("+counts.tous+")"),
@@ -1904,7 +2127,7 @@ function makeSubCommercialView(companyId,companyName,network,dbTable){
         )
       )
       ),
-      panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:companyId,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
+      panel&&React.createElement(LeadPanel,{lead:panel,color:net.color,companyId:companyId,onConvert:convertLead,onClose:function(){setPanel(null);},onSave:saveLeadUpdate})
     );
   };
 }
