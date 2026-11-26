@@ -1526,13 +1526,6 @@ function DiagnosticCard(props){
         TF.map(function(t){return React.createElement("div",{key:t[0],style:{marginBottom:10}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:3}},t[1]),React.createElement("textarea",{rows:t[2],disabled:locked,value:f[t[0]]||"",onChange:function(e){set(t[0],e.target.value);},style:ta}));}),
         null,
         React.createElement(PhotoGallery,{company:company,net:net,author:author,contactId:d.contact_id,projectId:d.project_id,diagnosticId:d.id,moment:"diag:general"})),
-      React.createElement("div",{style:{border:"1px dashed #9aa4b2",borderRadius:12,padding:14,marginBottom:14,background:"#fafbfd"}},
-        React.createElement("div",{style:{fontWeight:700,color:"#5B50C9",marginBottom:6,fontSize:13.5}},"🤖 Suggestion IA (distincte, jamais incluse sans validation)"),
-        React.createElement("div",{style:{fontSize:12.5,color:"#6b7684",marginBottom:8}},"Statut : "+aiTxt),
-        d.ai_suggestion?React.createElement("div",{style:{fontSize:13.5,padding:"10px 12px",background:"#fff",borderRadius:10,border:"1px solid #e3e8ef",whiteSpace:"pre-wrap"}},d.ai_suggestion):React.createElement("div",{style:{fontSize:12.5,color:"#9aa4b2"}},"La génération automatique sera branchée à l'étape suivante. Cette zone restera toujours séparée de l'avis du technicien."),
-        d.ai_suggestion&&!locked&&React.createElement("div",{style:{display:"flex",gap:8,marginTop:8}},
-          React.createElement("button",{onClick:function(){save({ai_status:"acceptee"},"Suggestion IA retenue");},style:{padding:"6px 14px",borderRadius:9,border:"none",background:"#2f7d3a",color:"#fff",cursor:"pointer",fontSize:12.5}},"Retenir"),
-          React.createElement("button",{onClick:function(){save({ai_status:"rejetee"},"Suggestion IA écartée");},style:{padding:"6px 14px",borderRadius:9,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer",fontSize:12.5}},"Écarter"))),
       mail&&React.createElement("div",{style:{border:"1px solid "+net.color,borderRadius:12,padding:14,marginBottom:12,background:"#fff"}},
         React.createElement("div",{style:{fontWeight:700,fontSize:13.5,marginBottom:8}},"Envoyer le rapport au client"),
         React.createElement("input",{value:mail.to,placeholder:"E-mail du client",onChange:function(e){setMail(Object.assign({},mail,{to:e.target.value}));},style:{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,marginBottom:8}}),
@@ -1545,7 +1538,14 @@ function DiagnosticCard(props){
         React.createElement("button",{onClick:function(){save(null);},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid "+net.color,background:"#fff",color:net.color,fontWeight:600,cursor:"pointer"}},"Enregistrer"),
         d.status!=="valide"&&React.createElement("button",{onClick:function(){if(window.confirm("Marquer ce diagnostic comme validé ?"))save({status:"valide",validated_by:author,validated_at:new Date().toISOString()},"Diagnostic validé");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},"✔ Valider"),
         d.status==="valide"&&React.createElement("button",{onClick:function(){save({status:"brouillon",validated_by:null,validated_at:null},"Diagnostic rouvert pour modification");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"↩ Repasser en brouillon"),
-        React.createElement("button",{onClick:del,disabled:busy,style:{padding:"10px 16px",borderRadius:10,border:"1px solid #e9c4c4",background:"#fff",color:"#9B2C2C",fontWeight:600,cursor:"pointer",marginLeft:"auto"}},"🗑️ Supprimer"))));
+        React.createElement("button",{onClick:del,disabled:busy,style:{padding:"10px 16px",borderRadius:10,border:"1px solid #e9c4c4",background:"#fff",color:"#9B2C2C",fontWeight:600,cursor:"pointer",marginLeft:"auto"}},"🗑️ Supprimer")),
+      React.createElement("div",{style:{border:"1px dashed #9aa4b2",borderRadius:12,padding:14,marginBottom:14,background:"#fafbfd"}},
+        React.createElement("div",{style:{fontWeight:700,color:"#5B50C9",marginBottom:6,fontSize:13.5}},"🤖 Suggestion IA (distincte, jamais incluse sans validation)"),
+        React.createElement("div",{style:{fontSize:12.5,color:"#6b7684",marginBottom:8}},"Statut : "+aiTxt),
+        d.ai_suggestion?React.createElement("div",{style:{fontSize:13.5,padding:"10px 12px",background:"#fff",borderRadius:10,border:"1px solid #e3e8ef",whiteSpace:"pre-wrap"}},d.ai_suggestion):React.createElement("div",{style:{fontSize:12.5,color:"#9aa4b2"}},"La génération automatique sera branchée à l'étape suivante. Cette zone restera toujours séparée de l'avis du technicien."),
+        d.ai_suggestion&&!locked&&React.createElement("div",{style:{display:"flex",gap:8,marginTop:8}},
+          React.createElement("button",{onClick:function(){save({ai_status:"acceptee"},"Suggestion IA retenue");},style:{padding:"6px 14px",borderRadius:9,border:"none",background:"#2f7d3a",color:"#fff",cursor:"pointer",fontSize:12.5}},"Retenir"),
+          React.createElement("button",{onClick:function(){save({ai_status:"rejetee"},"Suggestion IA écartée");},style:{padding:"6px 14px",borderRadius:9,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer",fontSize:12.5}},"Écarter")))));
 }
 
 /* ---- Prestations & libellés personnalisables ---- */
