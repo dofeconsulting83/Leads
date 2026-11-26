@@ -1082,6 +1082,10 @@ function CompanyDashboard(props){
 /* ===================== PHASE 2 · CONTACTS & PROJETS ===================== */
 var PROJECT_STAGES=[["qualifier","À qualifier"],["rdv","Rendez-vous"],["diagnostic","Diagnostic"],["devis_prepa","Devis en préparation"],["devis_envoye","Devis envoyé"],["accepte","Accepté"],["refuse","Refusé"]];
 var CONTACT_TYPES=[["prospect","Prospect"],["client","Client"]];
+var CONTACT_STATUSES=[["a_qualifier","À qualifier"],["a_contacter","À contacter"],["contacte","Contacté"],["rdv_fixe","Rendez-vous fixé"],["diagnostic","Diagnostic"],["devis_prepa","Devis en préparation"],["devis_envoye","Devis envoyé"],["attente_decision","En attente de décision"],["a_relancer","À relancer"],["attente_retour","Attente de retour"],["signe","Signé"],["refuse","Refusé"],["reporte","Reporté"],["perdu","Perdu"]];
+function cStatusLabel(k){var s=CONTACT_STATUSES.find(function(x){return x[0]===(k||"a_qualifier");});return s?s[1]:k;}
+function cStatusColors(k){k=k||"a_qualifier";if(k==="signe")return ["#E3F6E8","#1E6B35"];if(k==="refuse"||k==="perdu")return ["#FCEBEB","#9B2C2C"];if(k==="a_relancer"||k==="attente_decision"||k==="attente_retour"||k==="reporte")return ["#FAEEDA","#9A5B10"];return ["#E6F1FB","#185FA5"];}
+function cStatusBadge(k){var c=cStatusColors(k);return React.createElement("span",{style:{fontSize:11.5,fontWeight:600,padding:"3px 11px",borderRadius:999,background:c[0],color:c[1],whiteSpace:"nowrap"}},cStatusLabel(k));}
 var CONTACT_ORIGINS=["Prospection téléphonique","Prospection terrain","Site internet","Réseaux sociaux","Recommandation","Parrainage","Ref Client","Salon/Foire","Autre"];
 var COMM_TABLES={c19:"mh76_commerciaux",c14:"mh30_commerciaux",c20:"mh83_commerciaux",c5:"atm52_commerciaux"};
 function stageLabel(k){var s=PROJECT_STAGES.find(function(x){return x[0]===k;});return (STAGE_LABELS&&STAGE_LABELS[k])||(s?s[1]:k);}
@@ -1110,17 +1114,23 @@ async function ensureContactFromLead(company,lead,author){
 
 function ContactsModule(props){
   var company=props.company,author=props.author,net=NETWORKS[company.network];
-  var [settings,setSettings]=useState(null),[allP,setAllP]=useState([]),[showSet,setShowSet]=useState(false),[list,setList]=useState(null),[err,setErr]=useState(""),[sel,setSel]=useState(props.openId||null),[q,setQ]=useState(""),[tf,setTf]=useState(""),[creating,setCreating]=useState(false);
+  var [settings,setSettings]=useState(null),[allP,setAllP]=useState([]),[showSet,setShowSet]=useState(false),[list,setList]=useState(null),[err,setErr]=useState(""),[sel,setSel]=useState(props.openId||null),[q,setQ]=useState(""),[tf,setTf]=useState(""),[sf,setSf]=useState(""),[sf,setSf]=useState(""),[creating,setCreating]=useState(false);
   function load(){return dbSelect("contacts","company_id=eq."+company.id+"&order=created_at.desc").then(function(r){setList(r);}).catch(function(e){setErr(e.message);setList([]);});}
   function loadP(){return dbSelect("projects","company_id=eq."+company.id+"&order=created_at.desc").then(setAllP).catch(function(){});}
   useEffect(function(){load();loadP();dbSelect("company_settings","company_id=eq."+company.id).then(function(r){var s=r[0]||{};setStageLabels(s.stage_labels);setSettings(s);}).catch(function(){setSettings({});});return function(){setStageLabels({});};},[company.id]);
+  async function deleteFromList(c){
+    if(!window.confirm("Supprimer définitivement « "+contactName(c)+" » ?\n\nSes projets, diagnostics, photos et son historique seront aussi supprimés. Cette action est irréversible."))return;
+    try{var ph=await dbSelect("project_photos","contact_id=eq."+c.id);for(var i=0;i<ph.length;i++){await storageRemove(ph[i].path);}
+      await dbDelete("contacts","id=eq."+c.id);setList(function(p){return p.filter(function(x){return x.id!==c.id;});});}
+    catch(e){setErr("Suppression impossible : "+e.message);}
+  }
   function onSettingsSaved(row){setStageLabels(row.stage_labels);setSettings(row);}
   useEffect(function(){if(props.openId){setSel(props.openId);if(props.onOpened)props.onOpened();}},[props.openId]);
   var card={background:"#fff",borderRadius:16,border:"1px solid #eef1f6",boxShadow:"0 2px 12px rgba(20,40,80,.06)"};
   var shown=useMemo(function(){
     var s=q.toLowerCase();
-    return (list||[]).filter(function(c){return (!tf||c.type===tf)&&(!s||[c.first_name,c.last_name,c.email,c.phone,c.mobile,c.city,c.postal_code].some(function(v){return (v||"").toLowerCase().includes(s);}));});
-  },[list,q,tf]);
+    return (list||[]).filter(function(c){return (!tf||c.type===tf)&&(!sf||(c.status||"a_qualifier")===sf)&&(!s||[c.first_name,c.last_name,c.email,c.phone,c.mobile,c.city,c.postal_code].some(function(v){return (v||"").toLowerCase().includes(s);}));});
+  },[list,q,tf,sf]);
   var cur=sel&&list?list.find(function(c){return c.id===sel;}):null;
   if(sel&&list&&!cur){return React.createElement("div",{style:Object.assign({},card,{padding:40,textAlign:"center",color:"#6b7684"})},"Contact introuvable. ",React.createElement("button",{onClick:function(){setSel(null);load();},style:{marginLeft:8,padding:"6px 14px",borderRadius:10,border:"1px solid #e3e8ef",background:"#fff",cursor:"pointer"}},"Retour à la liste"));}
   if(cur){return React.createElement(ContactSheet,{canEdit:props.canEdit,company:company,author:author,contact:cur,net:net,services:servicesOf(settings,company),onBack:function(){setSel(null);load();loadP();},onDeleted:function(){setSel(null);setList(function(p){return p.filter(function(x){return x.id!==sel;});});loadP();},onChanged:function(u){setList(function(p){return p.map(function(c){return c.id===u.id?u:c;});});}});}
@@ -1130,6 +1140,7 @@ function ContactsModule(props){
     err&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:10,background:"#FDECEC",color:"#9B2C2C",marginBottom:12,fontSize:13}},"Erreur : "+err),
     React.createElement("div",{style:Object.assign({},card,{padding:16,marginBottom:16,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"})},
       React.createElement("input",{value:q,onChange:function(e){setQ(e.target.value);},placeholder:"🔍  Rechercher un contact (nom, téléphone, e-mail, ville…)",style:Object.assign({},inp,{flex:"2 1 260px"})}),
+      React.createElement("select",{value:sf,onChange:function(e){setSf(e.target.value);},style:inp},React.createElement("option",{value:""},"Tous les statuts"),CONTACT_STATUSES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);})),
       React.createElement("select",{value:tf,onChange:function(e){setTf(e.target.value);},style:inp},React.createElement("option",{value:""},"Tous les types"),CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);})),
       props.canEdit&&React.createElement("button",{onClick:function(){setShowSet(!showSet);},style:{padding:"10px 14px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer",fontSize:14}},"⚙️ Personnaliser"),
       React.createElement("button",{onClick:function(){setCreating(true);},style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau contact")),
@@ -1138,17 +1149,18 @@ function ContactsModule(props){
     list.length===0
       ?React.createElement("div",{style:Object.assign({},card,{padding:50,textAlign:"center",color:"#6b7684"})},React.createElement("div",{style:{fontSize:34,marginBottom:8}},"📇"),React.createElement("div",{style:{fontWeight:600,color:"#12263f",marginBottom:4}},"Aucun contact pour le moment"),React.createElement("div",{style:{fontSize:13}},"Ouvrez un lead et cliquez sur « Fiche contact », ou créez un contact manuellement."))
       :React.createElement("div",{style:Object.assign({},card,{overflowX:"auto"})},React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
-        React.createElement("thead",null,React.createElement("tr",null,["Contact","Type","Avancement","Téléphone","E-mail","CP / Ville","Origine","Créé le"].map(function(h){return React.createElement("th",{key:h,style:{padding:"11px 14px",textAlign:"left",fontSize:11}},h);}))),
+        React.createElement("thead",null,React.createElement("tr",null,["Contact","Type","Statut","Téléphone","E-mail","CP / Ville","Origine","Créé le",""].map(function(h){return React.createElement("th",{key:h,style:{padding:"11px 14px",textAlign:"left",fontSize:11}},h);}))),
         React.createElement("tbody",null,shown.map(function(c){
           return React.createElement("tr",{key:c.id,onClick:function(){setSel(c.id);},style:{borderTop:"1px solid #eef1f6",cursor:"pointer"}},
             React.createElement("td",{style:{padding:"12px 14px"}},React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},React.createElement("div",{style:{width:34,height:34,borderRadius:"50%",background:net.light,color:net.color,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12}},contactInitials(c)),React.createElement("b",{style:{fontSize:13.5}},contactName(c)))),
             React.createElement("td",{style:{padding:"12px 14px"}},React.createElement("span",{style:{fontSize:11.5,fontWeight:600,padding:"2px 10px",borderRadius:999,background:c.type==="client"?"#E3F6E8":c.type==="prospect"?"#E6F1FB":"#F0F0F0",color:c.type==="client"?"#1E6B35":c.type==="prospect"?"#185FA5":"#555"}},(CONTACT_TYPES.find(function(t){return t[0]===c.type;})||["","—"])[1])),
-            React.createElement("td",{style:{padding:"12px 14px",minWidth:150}},(function(){var cp=allP.filter(function(p){return p.contact_id===c.id;});return cp.length?stageBar(cp[0].stage,net):React.createElement("span",{style:{color:"#9aa4b2",fontSize:12.5}},"Aucun projet");})()),
+            React.createElement("td",{style:{padding:"12px 14px"}},cStatusBadge(c.status)),
             React.createElement("td",{style:{padding:"12px 14px",fontSize:13}},c.phone||c.mobile||"—"),
             React.createElement("td",{style:{padding:"12px 14px",fontSize:13}},c.email||"—"),
             React.createElement("td",{style:{padding:"12px 14px",fontSize:13}},((c.postal_code||"")+" "+(c.city||"")).trim()||"—"),
             React.createElement("td",{style:{padding:"12px 14px"}},c.origin?React.createElement(SourceBadge,{source:c.origin}):"—"),
-            React.createElement("td",{style:{padding:"12px 14px",fontSize:12.5,color:"#6b7684",whiteSpace:"nowrap"}},fmtDT(c.created_at)));
+            React.createElement("td",{style:{padding:"12px 14px",fontSize:12.5,color:"#6b7684",whiteSpace:"nowrap"}},fmtDT(c.created_at)),
+            React.createElement("td",{style:{padding:"12px 10px"}},props.canEdit&&React.createElement("button",{title:"Supprimer ce contact",onClick:function(e){e.stopPropagation();deleteFromList(c);},style:{border:"none",background:"transparent",cursor:"pointer",fontSize:16}},"🗑️")));
         })))));
 }
 
@@ -1221,6 +1233,13 @@ function ContactSheet(props){
   }
   var [comms,setComms]=useState([]);
   useEffect(function(){var t=COMM_TABLES[company.id];if(t)dbSelect(t,"order=created_at.asc").then(function(r){setComms(r||[]);}).catch(function(){});},[company.id]);
+  async function setStatus(st){
+    var old=c.status||"a_qualifier";if(st===old)return;
+    try{await dbUpdate("contacts","id=eq."+c.id,{status:st,updated_at:new Date().toISOString()});
+      await logActivity(company,author,c.id,null,"contact.updated","Statut : "+cStatusLabel(old)+" → "+cStatusLabel(st),{avant:old,apres:st});
+      props.onChanged(Object.assign({},c,{status:st}));loadA();}
+    catch(e){setMsg({t:"err",x:e.message});}
+  }
   async function assignTo(id){
     try{var m=comms.find(function(x){return x.id===id;});
       await dbUpdate("contacts","id=eq."+c.id,{assigned_to:id||null,updated_at:new Date().toISOString()});
@@ -1259,7 +1278,7 @@ function ContactSheet(props){
     var e=editP;if(!e.title.trim()){setMsg({t:"err",x:"Le titre est obligatoire."});return;}
     setBusy(true);
     try{
-      var patch={title:e.title.trim(),service:(e.services||[]).join(", ")||null,services:e.services||[],site_address:e.site_address||null,due_date:e.due_date||null,work_date:e.work_date||null,description:e.description||null,rdv_at:e.rdv_at?new Date(e.rdv_at).toISOString():null,rdv_notes:e.rdv_notes||null,updated_at:new Date().toISOString()};
+      var patch={title:e.title.trim(),service:(e.services||[]).join(", ")||null,services:e.services||[],site_address:e.site_address||null,work_date:e.work_date||null,description:e.description||null,rdv_at:e.rdv_at?new Date(e.rdv_at).toISOString():null,rdv_notes:e.rdv_notes||null,updated_at:new Date().toISOString()};
       await dbUpdate("projects","id=eq."+e.id,patch);
       await logActivity(company,author,c.id,e.id,"project.updated","Projet « "+patch.title+" » modifié"+(patch.rdv_at?" (RDV le "+fmtDT(patch.rdv_at)+")":""),null);
       setEditP(null);await loadP();await loadA();setMsg({t:"ok",x:"Projet modifié."});
@@ -1267,6 +1286,14 @@ function ContactSheet(props){
     setBusy(false);
   }
   function toLocalInput(iso){if(!iso)return "";var d=new Date(iso);if(isNaN(d))return "";var o=new Date(d.getTime()-d.getTimezoneOffset()*60000);return o.toISOString().slice(0,16);}
+  async function deleteProject(p){
+    if(!window.confirm("Supprimer le projet « "+p.title+" » ?\n\nSes diagnostics et ses photos seront aussi supprimés. Cette action est irréversible."))return;
+    try{var ph=await dbSelect("project_photos","project_id=eq."+p.id);for(var i=0;i<ph.length;i++){await storageRemove(ph[i].path);}
+      await dbDelete("projects","id=eq."+p.id);
+      await logActivity(company,author,c.id,null,"project.deleted","Projet supprimé : "+p.title,null);
+      await loadP();await loadA();setMsg({t:"ok",x:"Projet supprimé."});}
+    catch(e){setMsg({t:"err",x:"Suppression impossible : "+e.message});}
+  }
   async function setStage(p,st){
     if(p.stage===st)return;
     try{await dbUpdate("projects","id=eq."+p.id,{stage:st,updated_at:new Date().toISOString()});await logActivity(company,author,c.id,p.id,"project.stage_changed","Projet « "+p.title+" » : "+stageLabel(p.stage)+" → "+stageLabel(st),{avant:p.stage,apres:st});await loadP();await loadA();}
@@ -1293,7 +1320,7 @@ function ContactSheet(props){
           c.email&&React.createElement("a",{href:"mailto:"+c.email,style:{color:"inherit",textDecoration:"none"}},"✉️ "+c.email),
           (c.phone||c.mobile)&&React.createElement("a",{href:"tel:"+(c.mobile||c.phone),style:{color:"inherit",textDecoration:"none"}},"📞 "+(c.mobile||c.phone)),
           (c.address||c.city)&&React.createElement("span",null,"📍 "+[c.address,c.postal_code,c.city].filter(Boolean).join(", ")))),
-      React.createElement("div",{style:{flex:"1 1 220px",maxWidth:300}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:6}},"Avancement"),projects&&projects.length?stageBar(projects[0].stage,net):React.createElement("span",{style:{color:"#9aa4b2",fontSize:13}},"Aucun projet")),
+      React.createElement("div",{style:{flex:"0 1 210px"}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:6}},"Statut du contact"),React.createElement("select",{value:c.status||"a_qualifier",onChange:function(e){setStatus(e.target.value);},style:{width:"100%",padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,background:"#fff"}},CONTACT_STATUSES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);}))),
       React.createElement("div",{style:{flex:"0 1 210px"}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:6}},"Commercial attribué"),React.createElement("select",{value:c.assigned_to||"",onChange:function(e){assignTo(e.target.value);},style:{width:"100%",padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,background:"#fff"}},React.createElement("option",{value:""},"Non attribué"),comms.map(function(m){return React.createElement("option",{key:m.id,value:m.id},m.nom||m.login||m.id);}))),
       React.createElement("div",{style:{display:"flex",gap:10}},[["Projets",projects?projects.length:"…"]].map(function(k){return React.createElement("div",{key:k[0],style:{textAlign:"center",padding:"10px 20px",borderRadius:14,border:"1px solid #eef1f6",background:"#f8fafc"}},React.createElement("div",{style:{fontSize:22,fontWeight:700,color:"#12263f"}},k[1]),React.createElement("div",{style:{fontSize:12,color:"#6b7684"}},k[0]));})),
       React.createElement("button",{onClick:function(){setNp({title:"",services:[],site_address:"",due_date:"",work_date:"",description:""});setTab("projects");},style:{padding:"11px 20px",borderRadius:12,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau projet"),
@@ -1331,7 +1358,7 @@ function ContactSheet(props){
           React.createElement("input",{placeholder:"Titre du projet (ex : Traitement façade)",value:np.title,onChange:function(e){setNp(Object.assign({},np,{title:e.target.value}));},style:inp}),
           React.createElement(ServicePicker,{options:props.services||[],value:np.services,net:net,onChange:function(v){setNp(function(p){return Object.assign({},p,{services:v});});}}),
           React.createElement("input",{placeholder:"Adresse du chantier (par défaut : adresse du contact)",value:np.site_address,onChange:function(e){setNp(Object.assign({},np,{site_address:e.target.value}));},style:inp}),
-          React.createElement("input",{type:"date",title:"Échéance",value:np.due_date,onChange:function(e){setNp(Object.assign({},np,{due_date:e.target.value}));},style:inp}),React.createElement("div",null,React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},"Date prévue des travaux (facultatif)"),React.createElement("input",{type:"date",value:np.work_date,onChange:function(e){setNp(Object.assign({},np,{work_date:e.target.value}));},style:inp}))),
+          React.createElement("div",null,React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},"Date prévue des travaux (facultatif)"),React.createElement("input",{type:"date",value:np.work_date,onChange:function(e){setNp(Object.assign({},np,{work_date:e.target.value}));},style:inp}))),
         React.createElement("textarea",{placeholder:"Description du besoin / de l'habitation",value:np.description,onChange:function(e){setNp(Object.assign({},np,{description:e.target.value}));},rows:3,style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
         React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setNp(null);},style:{padding:"9px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:createProject,disabled:busy,style:{padding:"9px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Créer le projet"))),
       projects===null?React.createElement("div",{style:{padding:30,textAlign:"center",color:"#6b7684"}},"Chargement…")
@@ -1339,11 +1366,10 @@ function ContactSheet(props){
       :projects.map(function(p){var open=openP===p.id;return React.createElement("div",{key:p.id,style:Object.assign({},card,{marginBottom:12})},
         React.createElement("div",{onClick:function(){setOpenP(open?null:p.id);},style:{display:"flex",justifyContent:"space-between",gap:10,cursor:"pointer",flexWrap:"wrap"}},
           React.createElement("div",null,React.createElement("div",{style:{fontWeight:700,fontSize:15}},p.title),React.createElement("div",{style:{fontSize:12.5,color:"#6b7684",marginTop:2}},(p.reference||"")+((p.services&&p.services.length)?" · "+p.services.join(", "):(p.service?" · "+p.service:""))+" · créé le "+fmtDT(p.created_at))),
-          React.createElement("span",{style:{alignSelf:"flex-start",fontSize:12,fontWeight:600,padding:"3px 12px",borderRadius:999,background:p.stage==="accepte"?"#E3F6E8":p.stage==="refuse"?"#FCEBEB":net.light,color:p.stage==="accepte"?"#1E6B35":p.stage==="refuse"?"#9B2C2C":net.color}},stageLabel(p.stage))),
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"flex-start"}},props.canEdit&&React.createElement("button",{title:"Supprimer ce projet",onClick:function(ev){ev.stopPropagation();deleteProject(p);},style:{border:"1px solid #e9c4c4",background:"#fff",borderRadius:8,cursor:"pointer",fontSize:14,padding:"2px 8px"}},"🗑️"),React.createElement("span",{style:{alignSelf:"flex-start",fontSize:12,fontWeight:600,padding:"3px 12px",borderRadius:999,background:p.stage==="accepte"?"#E3F6E8":p.stage==="refuse"?"#FCEBEB":net.light,color:p.stage==="accepte"?"#1E6B35":p.stage==="refuse"?"#9B2C2C":net.color}},stageLabel(p.stage)))),
         open&&React.createElement("div",{style:{marginTop:8}},projectStepper(p),
           p.site_address&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"📍 Chantier : "+p.site_address),
           React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"📌 Projet créé le "+fmtDT(p.created_at)),
-          p.due_date&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"🗓️ Échéance : "+new Date(p.due_date).toLocaleDateString("fr-FR")),
           React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"🔨 Travaux prévus : "+(p.work_date?new Date(p.work_date).toLocaleDateString("fr-FR"):"à définir")),
           p.rdv_at&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"📅 Rendez-vous : "+fmtDT(p.rdv_at)+(p.rdv_notes?" — "+p.rdv_notes:"")),
           p.description&&React.createElement("div",{style:{fontSize:13.5,marginTop:8,padding:"10px 12px",background:"#f8fafc",borderRadius:10}},p.description),
@@ -1351,7 +1377,7 @@ function ContactSheet(props){
             ?React.createElement("div",{style:{marginTop:12,padding:14,border:"1px solid "+net.color,borderRadius:12}},
               React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:10}},
                 React.createElement("div",{key:"svc"},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},"Prestations"),React.createElement(ServicePicker,{key:editP.id,options:props.services||[],value:editP.services,net:net,onChange:function(v){setEditP(function(q){return Object.assign({},q,{services:v});});}})),
-                [["title","Titre","text"],["site_address","Adresse du chantier","text"],["due_date","Échéance","date"],["work_date","Date prévue des travaux","date"],["rdv_at","Date et heure du rendez-vous","datetime-local"],["rdv_notes","Note sur le rendez-vous","text"]].map(function(fd){return React.createElement("div",{key:fd[0]},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},fd[1]),React.createElement("input",{type:fd[2],value:editP[fd[0]]||"",onChange:function(ev){var n=Object.assign({},editP);n[fd[0]]=ev.target.value;setEditP(n);},style:inp}));})),
+                [["title","Titre","text"],["site_address","Adresse du chantier","text"],["work_date","Date prévue des travaux","date"],["rdv_at","Date et heure du rendez-vous","datetime-local"],["rdv_notes","Note sur le rendez-vous","text"]].map(function(fd){return React.createElement("div",{key:fd[0]},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},fd[1]),React.createElement("input",{type:fd[2],value:editP[fd[0]]||"",onChange:function(ev){var n=Object.assign({},editP);n[fd[0]]=ev.target.value;setEditP(n);},style:inp}));})),
               React.createElement("textarea",{rows:3,value:editP.description||"",onChange:function(ev){setEditP(Object.assign({},editP,{description:ev.target.value}));},placeholder:"Description",style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
               React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setEditP(null);},style:{padding:"8px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:saveProject,disabled:busy,style:{padding:"8px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")))
             :React.createElement("button",{onClick:function(){setEditP(Object.assign({},p,{rdv_at:toLocalInput(p.rdv_at),services:(p.services&&p.services.length)?p.services:(p.service?[p.service]:[])}));},style:{marginTop:10,padding:"7px 16px",borderRadius:9,border:"1px solid "+net.color,background:net.light,color:net.color,fontWeight:600,fontSize:13,cursor:"pointer"}},"✏️ Modifier le projet / le rendez-vous"),
