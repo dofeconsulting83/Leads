@@ -1081,7 +1081,9 @@ function CompanyDashboard(props){
 
 /* ===================== PHASE 2 · CONTACTS & PROJETS ===================== */
 var PROJECT_STAGES=[["qualifier","À qualifier"],["rdv","Rendez-vous"],["diagnostic","Diagnostic"],["devis_prepa","Devis en préparation"],["devis_envoye","Devis envoyé"],["accepte","Accepté"],["refuse","Refusé"]];
-var CONTACT_TYPES=[["prospect","Prospect"],["client","Client"],["autre","Autre"]];
+var CONTACT_TYPES=[["prospect","Prospect"],["client","Client"]];
+var CONTACT_ORIGINS=["Prospection téléphonique","Prospection terrain","Site internet","Réseaux sociaux","Recommandation","Parrainage","Ref Client","Salon/Foire","Autre"];
+var COMM_TABLES={c19:"mh76_commerciaux",c14:"mh30_commerciaux",c20:"mh83_commerciaux",c5:"atm52_commerciaux"};
 function stageLabel(k){var s=PROJECT_STAGES.find(function(x){return x[0]===k;});return (STAGE_LABELS&&STAGE_LABELS[k])||(s?s[1]:k);}
 function newId(p){return p+"_"+Date.now()+"_"+Math.random().toString(36).slice(2,7);}
 function contactName(c){return ((c.first_name||"")+" "+(c.last_name||"")).trim()||"Sans nom";}
@@ -1152,7 +1154,7 @@ function ContactsModule(props){
 
 function NewContactForm(props){
   var company=props.company,author=props.author,net=props.net;
-  var [f,setF]=useState({civility:"",first_name:"",last_name:"",email:"",phone:"",city:"",postal_code:"",type:"prospect"}),[busy,setBusy]=useState(false),[msg,setMsg]=useState("");
+  var [f,setF]=useState({civility:"",first_name:"",last_name:"",email:"",phone:"",city:"",postal_code:"",type:"prospect",origin:"",is_b2b:false,company_name:"",siret:"",vat_number:""}),[busy,setBusy]=useState(false),[msg,setMsg]=useState("");
   function set(k,v){setF(function(p){var n=Object.assign({},p);n[k]=v;return n;});}
   var inp={padding:"10px 12px",borderRadius:10,border:"1px solid #d9e0ea",fontSize:14,width:"100%",boxSizing:"border-box"};
   async function save(){
@@ -1163,7 +1165,7 @@ function NewContactForm(props){
       if(f.email.trim()){var r=await dbSelect("contacts","company_id=eq."+company.id+"&email=ilike."+encodeURIComponent(f.email.trim()));if(r.length)dup=r[0];}
       if(!dup&&f.phone.trim()){var r2=await dbSelect("contacts","company_id=eq."+company.id+"&phone=eq."+encodeURIComponent(f.phone.trim()));if(r2.length)dup=r2[0];}
       if(dup){setMsg("Ce contact existe déjà : "+contactName(dup)+" (même e-mail ou téléphone).");setBusy(false);return;}
-      var row={id:newId("ct"),company_id:company.id,civility:f.civility||null,first_name:f.first_name.trim()||null,last_name:f.last_name.trim()||null,email:f.email.trim().toLowerCase()||null,phone:f.phone.trim()||null,city:f.city.trim()||null,postal_code:f.postal_code.trim()||null,country:"France",type:f.type,origin:"Saisie manuelle",created_by:author||""};
+      var row={id:newId("ct"),company_id:company.id,civility:f.civility||null,first_name:f.first_name.trim()||null,last_name:f.last_name.trim()||null,email:f.email.trim().toLowerCase()||null,phone:f.phone.trim()||null,city:f.city.trim()||null,postal_code:f.postal_code.trim()||null,country:"France",type:f.type,origin:f.origin||"Saisie manuelle",is_b2b:!!f.is_b2b,company_name:f.is_b2b?(f.company_name.trim()||null):null,siret:f.is_b2b?(f.siret.trim()||null):null,vat_number:f.is_b2b?(f.vat_number.trim()||null):null,created_by:author||""};
       await dbInsertOne("contacts",row);
       await logActivity(company,author,row.id,null,"contact.created","Contact créé manuellement",null);
       props.onCreated(Object.assign({created_at:new Date().toISOString(),updated_at:new Date().toISOString()},row));
@@ -1179,14 +1181,19 @@ function NewContactForm(props){
       React.createElement("input",{placeholder:"Téléphone",value:f.phone,onChange:function(e){set("phone",e.target.value);},style:inp}),
       React.createElement("input",{placeholder:"Code postal",value:f.postal_code,onChange:function(e){set("postal_code",e.target.value);},style:inp}),
       React.createElement("input",{placeholder:"Ville",value:f.city,onChange:function(e){set("city",e.target.value);},style:inp}),
-      React.createElement("select",{value:f.type,onChange:function(e){set("type",e.target.value);},style:inp},CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);}))),
+      React.createElement("select",{value:f.type,onChange:function(e){set("type",e.target.value);},style:inp},CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);})),
+      React.createElement("select",{value:f.origin,onChange:function(e){set("origin",e.target.value);},style:inp},React.createElement("option",{value:""},"Origine…"),CONTACT_ORIGINS.map(function(o){return React.createElement("option",{key:o,value:o},o);})),
+      React.createElement("label",{style:{display:"flex",gap:8,alignItems:"center",fontSize:13.5,fontWeight:600}},React.createElement("input",{type:"checkbox",checked:f.is_b2b,onChange:function(e){set("is_b2b",e.target.checked);}}),"Client professionnel (BtoB)"),
+      f.is_b2b&&React.createElement("input",{placeholder:"Société",value:f.company_name,onChange:function(e){set("company_name",e.target.value);},style:inp}),
+      f.is_b2b&&React.createElement("input",{placeholder:"SIRET",value:f.siret,onChange:function(e){set("siret",e.target.value);},style:inp}),
+      f.is_b2b&&React.createElement("input",{placeholder:"N° TVA intracommunautaire",value:f.vat_number,onChange:function(e){set("vat_number",e.target.value);},style:inp})),
     msg&&React.createElement("div",{style:{padding:"9px 12px",borderRadius:10,background:"#FDECEC",color:"#9B2C2C",fontSize:13,marginBottom:10}},msg),
     React.createElement("div",{style:{display:"flex",gap:8}},
       React.createElement("button",{onClick:props.onCancel,style:{padding:"10px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),
       React.createElement("button",{onClick:save,disabled:busy,style:{padding:"10px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:busy?"wait":"pointer"}},busy?"Enregistrement…":"Créer le contact")));
 }
 
-var CONTACT_FIELDS=[["civility","Civilité"],["first_name","Prénom"],["last_name","Nom"],["type","Type"],["origin","Origine"],["accounting_code","Code comptable"],["email","E-mail"],["phone","Téléphone fixe"],["mobile","Mobile"],["address","Adresse"],["postal_code","Code postal"],["city","Ville"],["country","Pays"]];
+var CONTACT_FIELDS=[["type","Type"],["origin","Origine"],["is_b2b","Client professionnel (BtoB)"],["company_name","Société","b2b"],["siret","SIRET","b2b"],["vat_number","N° TVA intracommunautaire","b2b"],["civility","Civilité"],["first_name","Prénom"],["last_name","Nom"],["mobile","Mobile"],["phone","Téléphone fixe"],["email","E-mail"],["address","Adresse"],["postal_code","Code postal"],["city","Ville"],["country","Pays"],["accounting_code","Code comptable"]];
 
 function ContactSheet(props){
   var company=props.company,author=props.author,c=props.contact,net=props.net;
@@ -1212,6 +1219,15 @@ function ContactSheet(props){
     }catch(e){setMsg({t:"err",x:e.message});}
     setBusy(false);
   }
+  var [comms,setComms]=useState([]);
+  useEffect(function(){var t=COMM_TABLES[company.id];if(t)dbSelect(t,"order=created_at.asc").then(function(r){setComms(r||[]);}).catch(function(){});},[company.id]);
+  async function assignTo(id){
+    try{var m=comms.find(function(x){return x.id===id;});
+      await dbUpdate("contacts","id=eq."+c.id,{assigned_to:id||null,updated_at:new Date().toISOString()});
+      await logActivity(company,author,c.id,null,"contact.updated",id?"Contact attribué à "+(m?m.nom:id):"Attribution retirée",null);
+      props.onChanged(Object.assign({},c,{assigned_to:id||null}));loadA();setMsg({t:"ok",x:id?"Contact attribué à "+(m?m.nom:"")+".":"Attribution retirée."});}
+    catch(e){setMsg({t:"err",x:e.message});}
+  }
   async function deleteContact(){
     var n=projects?projects.length:0;
     if(!window.confirm("Supprimer définitivement « "+contactName(c)+" » ?\n\nCela supprime aussi ses "+n+" projet(s), diagnostics, photos et son historique. Cette action est irréversible."))return;
@@ -1232,7 +1248,7 @@ function ContactSheet(props){
     if(!np.title.trim()){setMsg({t:"err",x:"Donnez un titre au projet."});return;}
     setBusy(true);
     try{
-      var row={id:newId("pr"),company_id:company.id,contact_id:c.id,title:np.title.trim(),service:(np.services||[]).join(", ")||null,services:np.services||[],site_address:np.site_address.trim()||(c.address?(c.address+" "+(c.postal_code||"")+" "+(c.city||"")).trim():null),stage:"qualifier",due_date:np.due_date||null,description:np.description.trim()||null,created_by:author||""};
+      var row={id:newId("pr"),company_id:company.id,contact_id:c.id,title:np.title.trim(),service:(np.services||[]).join(", ")||null,services:np.services||[],site_address:np.site_address.trim()||(c.address?(c.address+" "+(c.postal_code||"")+" "+(c.city||"")).trim():null),stage:"qualifier",due_date:np.due_date||null,work_date:np.work_date||null,description:np.description.trim()||null,created_by:author||""};
       await dbInsertOne("projects",row);
       await logActivity(company,author,c.id,row.id,"project.created","Projet créé : "+row.title,null);
       setNp(null);await loadP();await loadA();setTab("projects");setMsg({t:"ok",x:"Projet créé."});
@@ -1243,7 +1259,7 @@ function ContactSheet(props){
     var e=editP;if(!e.title.trim()){setMsg({t:"err",x:"Le titre est obligatoire."});return;}
     setBusy(true);
     try{
-      var patch={title:e.title.trim(),service:(e.services||[]).join(", ")||null,services:e.services||[],site_address:e.site_address||null,due_date:e.due_date||null,description:e.description||null,rdv_at:e.rdv_at?new Date(e.rdv_at).toISOString():null,rdv_notes:e.rdv_notes||null,updated_at:new Date().toISOString()};
+      var patch={title:e.title.trim(),service:(e.services||[]).join(", ")||null,services:e.services||[],site_address:e.site_address||null,due_date:e.due_date||null,work_date:e.work_date||null,description:e.description||null,rdv_at:e.rdv_at?new Date(e.rdv_at).toISOString():null,rdv_notes:e.rdv_notes||null,updated_at:new Date().toISOString()};
       await dbUpdate("projects","id=eq."+e.id,patch);
       await logActivity(company,author,c.id,e.id,"project.updated","Projet « "+patch.title+" » modifié"+(patch.rdv_at?" (RDV le "+fmtDT(patch.rdv_at)+")":""),null);
       setEditP(null);await loadP();await loadA();setMsg({t:"ok",x:"Projet modifié."});
@@ -1265,7 +1281,7 @@ function ContactSheet(props){
   var actIcon=function(t){return t==="comment"?"💬":t.indexOf("project")===0?"📁":t==="contact.created"?"✨":"✏️";};
   var tabs=[["overview","Vue d'ensemble"],["projects","Projets"+(projects?" ("+projects.length+")":"")],["diag","Diagnostics"],["history","Historique"]];
   var soon={quotes:"Création et suivi des devis · à venir (Phase 5).",invoices:"Facturation · à venir (Phase 6)."};
-  function infoRow(k,label){var v=c[k];var t=k==="type"?(CONTACT_TYPES.find(function(x){return x[0]===v;})||["","—"])[1]:v;return React.createElement("div",{key:k,style:{display:"flex",gap:10,padding:"6px 0",fontSize:13.5,borderBottom:"1px solid #f3f5f9"}},React.createElement("span",{style:{width:120,color:"#6b7684",flexShrink:0}},label),React.createElement("span",{style:{fontWeight:500,wordBreak:"break-word"}},t||"—"));}
+  function infoRow(k,label){var v=c[k];var t=k==="type"?((CONTACT_TYPES.find(function(x){return x[0]===v;})||[v,v])[1]):k==="is_b2b"?(v?"Oui":"Non"):v;return React.createElement("div",{key:k,style:{display:"flex",gap:10,padding:"6px 0",fontSize:13.5,borderBottom:"1px solid #f3f5f9"}},React.createElement("span",{style:{width:120,color:"#6b7684",flexShrink:0}},label),React.createElement("span",{style:{fontWeight:500,wordBreak:"break-word"}},t||"—"));}
   function projectStepper(p){return React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",margin:"10px 0"}},PROJECT_STAGES.map(function(s,i){var on=p.stage===s[0];return React.createElement("button",{key:s[0],onClick:function(){setStage(p,s[0]);},title:"Passer à : "+stageLabel(s[0]),style:{padding:"5px 11px",borderRadius:999,border:"1px solid "+(on?net.color:"#e3e8ef"),background:on?net.light:"#fff",color:on?net.color:"#6b7684",fontWeight:on?700:500,fontSize:12,cursor:"pointer"}},(i+1)+". "+stageLabel(s[0]));}));}
   return React.createElement("div",null,
     React.createElement("button",{onClick:props.onBack,style:{border:"none",background:"transparent",color:net.color,cursor:"pointer",fontSize:14,fontWeight:600,marginBottom:12,padding:0}},"← Contacts"),
@@ -1278,8 +1294,9 @@ function ContactSheet(props){
           (c.phone||c.mobile)&&React.createElement("a",{href:"tel:"+(c.mobile||c.phone),style:{color:"inherit",textDecoration:"none"}},"📞 "+(c.mobile||c.phone)),
           (c.address||c.city)&&React.createElement("span",null,"📍 "+[c.address,c.postal_code,c.city].filter(Boolean).join(", ")))),
       React.createElement("div",{style:{flex:"1 1 220px",maxWidth:300}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:6}},"Avancement"),projects&&projects.length?stageBar(projects[0].stage,net):React.createElement("span",{style:{color:"#9aa4b2",fontSize:13}},"Aucun projet")),
-      React.createElement("div",{style:{display:"flex",gap:10}},[["Projets",projects?projects.length:"…"],["Actions",acts?acts.length:"…"]].map(function(k){return React.createElement("div",{key:k[0],style:{textAlign:"center",padding:"10px 20px",borderRadius:14,border:"1px solid #eef1f6",background:"#f8fafc"}},React.createElement("div",{style:{fontSize:22,fontWeight:700,color:"#12263f"}},k[1]),React.createElement("div",{style:{fontSize:12,color:"#6b7684"}},k[0]));})),
-      React.createElement("button",{onClick:function(){setNp({title:"",services:[],site_address:"",due_date:"",description:""});setTab("projects");},style:{padding:"11px 20px",borderRadius:12,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau projet"),
+      React.createElement("div",{style:{flex:"0 1 210px"}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",textTransform:"uppercase",letterSpacing:.3,marginBottom:6}},"Commercial attribué"),React.createElement("select",{value:c.assigned_to||"",onChange:function(e){assignTo(e.target.value);},style:{width:"100%",padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,background:"#fff"}},React.createElement("option",{value:""},"Non attribué"),comms.map(function(m){return React.createElement("option",{key:m.id,value:m.id},m.nom||m.login||m.id);}))),
+      React.createElement("div",{style:{display:"flex",gap:10}},[["Projets",projects?projects.length:"…"]].map(function(k){return React.createElement("div",{key:k[0],style:{textAlign:"center",padding:"10px 20px",borderRadius:14,border:"1px solid #eef1f6",background:"#f8fafc"}},React.createElement("div",{style:{fontSize:22,fontWeight:700,color:"#12263f"}},k[1]),React.createElement("div",{style:{fontSize:12,color:"#6b7684"}},k[0]));})),
+      React.createElement("button",{onClick:function(){setNp({title:"",services:[],site_address:"",due_date:"",work_date:"",description:""});setTab("projects");},style:{padding:"11px 20px",borderRadius:12,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:14,cursor:"pointer"}},"+ Nouveau projet"),
       props.canEdit&&React.createElement("button",{onClick:deleteContact,disabled:busy,title:"Supprimer ce contact",style:{padding:"11px 14px",borderRadius:12,border:"1px solid #e9c4c4",background:"#fff",color:"#9B2C2C",fontWeight:600,fontSize:14,cursor:"pointer"}},"🗑️ Supprimer")),
     React.createElement("div",{style:{display:"flex",gap:4,borderBottom:"1px solid #e3e8ef",marginBottom:16,overflowX:"auto"}},tabs.map(function(t){var on=tab===t[0],dis=!!soon[t[0]];return React.createElement("button",{key:t[0],onClick:function(){setTab(t[0]);},style:{padding:"11px 18px",border:"none",background:"transparent",borderBottom:on?"3px solid "+net.color:"3px solid transparent",color:on?net.color:dis?"#9aa4b2":"#4a5565",fontWeight:on?700:500,fontSize:14,cursor:"pointer",whiteSpace:"nowrap"}},t[1]);})),
     msg&&React.createElement("div",{style:{padding:"10px 14px",borderRadius:10,background:msg.t==="ok"?"#E8F6EC":"#FDECEC",color:msg.t==="ok"?"#1E6B35":"#9B2C2C",marginBottom:14,fontSize:13,display:"flex",justifyContent:"space-between"}},React.createElement("span",null,msg.x),React.createElement("button",{onClick:function(){setMsg(null);},style:{border:"none",background:"transparent",cursor:"pointer",color:"inherit"}},"✕")),
@@ -1289,9 +1306,17 @@ function ContactSheet(props){
       React.createElement("div",{style:card},
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},React.createElement("b",{style:{fontSize:15}},"Informations contact"),edit?null:React.createElement("button",{onClick:function(){setForm(c);setEdit(true);},style:{border:"none",background:"transparent",color:net.color,fontWeight:600,cursor:"pointer",fontSize:13}},"Modifier")),
         edit
-          ?React.createElement("div",null,CONTACT_FIELDS.map(function(p){var k=p[0];return React.createElement("div",{key:k,style:{marginBottom:8}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase",letterSpacing:.3}},p[1]),k==="type"?React.createElement("select",{value:form.type||"prospect",onChange:function(e){setForm(Object.assign({},form,{type:e.target.value}));},style:inp},CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);})):React.createElement("input",{value:form[k]||"",onChange:function(e){var n=Object.assign({},form);n[k]=e.target.value;setForm(n);},style:inp}));}),
+          ?React.createElement("div",null,CONTACT_FIELDS.filter(function(p){return p[2]!=="b2b"||form.is_b2b;}).map(function(p){var k=p[0];
+            function setK(v){var n=Object.assign({},form);n[k]=v;setForm(n);}
+            var ctl;
+            if(k==="type")ctl=React.createElement("select",{value:form.type||"prospect",onChange:function(e){setK(e.target.value);},style:inp},CONTACT_TYPES.map(function(t){return React.createElement("option",{key:t[0],value:t[0]},t[1]);}));
+            else if(k==="origin")ctl=React.createElement("select",{value:form.origin||"",onChange:function(e){setK(e.target.value);},style:inp},React.createElement("option",{value:""},"—"),(form.origin&&CONTACT_ORIGINS.indexOf(form.origin)<0?[form.origin]:[]).concat(CONTACT_ORIGINS).map(function(o){return React.createElement("option",{key:o,value:o},o);}));
+            else if(k==="civility")ctl=React.createElement("select",{value:form.civility||"",onChange:function(e){setK(e.target.value);},style:inp},React.createElement("option",{value:""},"—"),["Mme","M."].map(function(o){return React.createElement("option",{key:o,value:o},o);}));
+            else if(k==="is_b2b")return React.createElement("label",{key:k,style:{display:"flex",gap:8,alignItems:"center",margin:"4px 0 10px",fontSize:13.5,fontWeight:600}},React.createElement("input",{type:"checkbox",checked:!!form.is_b2b,onChange:function(e){setK(e.target.checked);}}),p[1]);
+            else ctl=React.createElement("input",{value:form[k]||"",onChange:function(e){setK(e.target.value);},style:inp});
+            return React.createElement("div",{key:k,style:{marginBottom:8}},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase",letterSpacing:.3}},p[1]),ctl);}),
             React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},React.createElement("button",{onClick:function(){setEdit(false);},style:{padding:"9px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:saveEdit,disabled:busy,style:{padding:"9px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")))
-          :React.createElement("div",null,CONTACT_FIELDS.map(function(p){return infoRow(p[0],p[1]);}))),
+          :React.createElement("div",null,CONTACT_FIELDS.filter(function(p){return p[2]!=="b2b"||c.is_b2b;}).map(function(p){return infoRow(p[0],p[1]);}))),
       React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
         React.createElement("div",{style:card},React.createElement("b",{style:{fontSize:15,display:"block",marginBottom:10}},"Projets"),
           projects===null?"Chargement…":projects.length===0?React.createElement("div",{style:{color:"#9aa4b2",fontSize:13}},"Aucun projet pour ce contact."):projects.slice(0,3).map(function(p){return React.createElement("div",{key:p.id,onClick:function(){setTab("projects");setOpenP(p.id);},style:{padding:"9px 0",borderBottom:"1px solid #f3f5f9",cursor:"pointer"}},React.createElement("div",{style:{fontWeight:600,fontSize:14}},p.title),React.createElement("div",{style:{fontSize:12,color:"#6b7684"}},(p.reference||"")+" · "+stageLabel(p.stage)));})),
@@ -1306,7 +1331,7 @@ function ContactSheet(props){
           React.createElement("input",{placeholder:"Titre du projet (ex : Traitement façade)",value:np.title,onChange:function(e){setNp(Object.assign({},np,{title:e.target.value}));},style:inp}),
           React.createElement(ServicePicker,{options:props.services||[],value:np.services,net:net,onChange:function(v){setNp(function(p){return Object.assign({},p,{services:v});});}}),
           React.createElement("input",{placeholder:"Adresse du chantier (par défaut : adresse du contact)",value:np.site_address,onChange:function(e){setNp(Object.assign({},np,{site_address:e.target.value}));},style:inp}),
-          React.createElement("input",{type:"date",value:np.due_date,onChange:function(e){setNp(Object.assign({},np,{due_date:e.target.value}));},style:inp})),
+          React.createElement("input",{type:"date",title:"Échéance",value:np.due_date,onChange:function(e){setNp(Object.assign({},np,{due_date:e.target.value}));},style:inp}),React.createElement("div",null,React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},"Date prévue des travaux (facultatif)"),React.createElement("input",{type:"date",value:np.work_date,onChange:function(e){setNp(Object.assign({},np,{work_date:e.target.value}));},style:inp}))),
         React.createElement("textarea",{placeholder:"Description du besoin / de l'habitation",value:np.description,onChange:function(e){setNp(Object.assign({},np,{description:e.target.value}));},rows:3,style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
         React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setNp(null);},style:{padding:"9px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:createProject,disabled:busy,style:{padding:"9px 20px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Créer le projet"))),
       projects===null?React.createElement("div",{style:{padding:30,textAlign:"center",color:"#6b7684"}},"Chargement…")
@@ -1317,14 +1342,16 @@ function ContactSheet(props){
           React.createElement("span",{style:{alignSelf:"flex-start",fontSize:12,fontWeight:600,padding:"3px 12px",borderRadius:999,background:p.stage==="accepte"?"#E3F6E8":p.stage==="refuse"?"#FCEBEB":net.light,color:p.stage==="accepte"?"#1E6B35":p.stage==="refuse"?"#9B2C2C":net.color}},stageLabel(p.stage))),
         open&&React.createElement("div",{style:{marginTop:8}},projectStepper(p),
           p.site_address&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"📍 Chantier : "+p.site_address),
+          React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"📌 Projet créé le "+fmtDT(p.created_at)),
           p.due_date&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"🗓️ Échéance : "+new Date(p.due_date).toLocaleDateString("fr-FR")),
+          React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"🔨 Travaux prévus : "+(p.work_date?new Date(p.work_date).toLocaleDateString("fr-FR"):"à définir")),
           p.rdv_at&&React.createElement("div",{style:{fontSize:13,color:"#4a5565"}},"📅 Rendez-vous : "+fmtDT(p.rdv_at)+(p.rdv_notes?" — "+p.rdv_notes:"")),
           p.description&&React.createElement("div",{style:{fontSize:13.5,marginTop:8,padding:"10px 12px",background:"#f8fafc",borderRadius:10}},p.description),
           editP&&editP.id===p.id
             ?React.createElement("div",{style:{marginTop:12,padding:14,border:"1px solid "+net.color,borderRadius:12}},
               React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:10}},
                 React.createElement("div",{key:"svc"},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},"Prestations"),React.createElement(ServicePicker,{key:editP.id,options:props.services||[],value:editP.services,net:net,onChange:function(v){setEditP(function(q){return Object.assign({},q,{services:v});});}})),
-                [["title","Titre","text"],["site_address","Adresse du chantier","text"],["due_date","Échéance","date"],["rdv_at","Date et heure du rendez-vous","datetime-local"],["rdv_notes","Note sur le rendez-vous","text"]].map(function(fd){return React.createElement("div",{key:fd[0]},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},fd[1]),React.createElement("input",{type:fd[2],value:editP[fd[0]]||"",onChange:function(ev){var n=Object.assign({},editP);n[fd[0]]=ev.target.value;setEditP(n);},style:inp}));})),
+                [["title","Titre","text"],["site_address","Adresse du chantier","text"],["due_date","Échéance","date"],["work_date","Date prévue des travaux","date"],["rdv_at","Date et heure du rendez-vous","datetime-local"],["rdv_notes","Note sur le rendez-vous","text"]].map(function(fd){return React.createElement("div",{key:fd[0]},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},fd[1]),React.createElement("input",{type:fd[2],value:editP[fd[0]]||"",onChange:function(ev){var n=Object.assign({},editP);n[fd[0]]=ev.target.value;setEditP(n);},style:inp}));})),
               React.createElement("textarea",{rows:3,value:editP.description||"",onChange:function(ev){setEditP(Object.assign({},editP,{description:ev.target.value}));},placeholder:"Description",style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
               React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setEditP(null);},style:{padding:"8px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:saveProject,disabled:busy,style:{padding:"8px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")))
             :React.createElement("button",{onClick:function(){setEditP(Object.assign({},p,{rdv_at:toLocalInput(p.rdv_at),services:(p.services&&p.services.length)?p.services:(p.service?[p.service]:[])}));},style:{marginTop:10,padding:"7px 16px",borderRadius:9,border:"1px solid "+net.color,background:net.light,color:net.color,fontWeight:600,fontSize:13,cursor:"pointer"}},"✏️ Modifier le projet / le rendez-vous"),
