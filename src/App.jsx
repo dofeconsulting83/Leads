@@ -1380,7 +1380,7 @@ function ContactSheet(props){
                 [["title","Titre","text"],["site_address","Adresse du chantier","text"],["work_date","Date prévue des travaux","date"],["rdv_at","Date et heure du rendez-vous","datetime-local"],["rdv_notes","Note sur le rendez-vous","text"]].map(function(fd){return React.createElement("div",{key:fd[0]},React.createElement("div",{style:{fontSize:11,color:"#6b7684",marginBottom:3,textTransform:"uppercase"}},fd[1]),React.createElement("input",{type:fd[2],value:editP[fd[0]]||"",onChange:function(ev){var n=Object.assign({},editP);n[fd[0]]=ev.target.value;setEditP(n);},style:inp}));})),
               React.createElement("textarea",{rows:3,value:editP.description||"",onChange:function(ev){setEditP(Object.assign({},editP,{description:ev.target.value}));},placeholder:"Description",style:Object.assign({},inp,{marginBottom:10,fontFamily:"inherit"})}),
               React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setEditP(null);},style:{padding:"8px 16px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:saveProject,disabled:busy,style:{padding:"8px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},busy?"…":"Enregistrer")))
-            :React.createElement("button",{onClick:function(){setEditP(Object.assign({},p,{rdv_at:toLocalInput(p.rdv_at),services:(p.services&&p.services.length)?p.services:(p.service?[p.service]:[])}));},style:{marginTop:10,padding:"7px 16px",borderRadius:9,border:"1px solid "+net.color,background:net.light,color:net.color,fontWeight:600,fontSize:13,cursor:"pointer"}},"✏️ Modifier le projet / le rendez-vous"),
+            :React.createElement("button",{onClick:function(){setEditP(Object.assign({},p,{rdv_at:toLocalInput(p.rdv_at),services:(p.services&&p.services.length)?p.services:(p.service?[p.service]:[])}));},style:{marginTop:10,padding:"7px 16px",borderRadius:9,border:"1px solid "+net.color,background:net.light,color:net.color,fontWeight:600,fontSize:13,cursor:"pointer"}},"Modifier le projet"),
           React.createElement("div",{style:{marginTop:14,paddingTop:12,borderTop:"1px solid #eef1f6"}},React.createElement("div",{style:{fontWeight:700,fontSize:14,marginBottom:8}},"🩺 Diagnostics de ce projet"),React.createElement(DiagnosticsTab,{company:company,author:author,contact:c,net:net,fixed:p})),
           React.createElement(StagePhotos,{company:company,net:net,author:author,contactId:c.id,project:p})));})),
     tab==="history"&&React.createElement("div",{style:card},
@@ -1396,8 +1396,8 @@ async function storageUpload(path,blob){
   if(!r.ok){var t=await r.text();throw new Error("Envoi photo refusé ("+r.status+") "+t.slice(0,120));}
 }
 async function storageRemove(path){await fetch(SUPABASE_URL+"/storage/v1/object/"+PHOTO_BUCKET+"/"+path,{method:"DELETE",headers:{"apikey":SUPABASE_ANON,"Authorization":HEADERS.Authorization}});}
-async function signedUrl(path){
-  var r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/"+PHOTO_BUCKET+"/"+path,{method:"POST",headers:{"apikey":SUPABASE_ANON,"Authorization":HEADERS.Authorization,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:3600})});
+async function signedUrl(path,exp){
+  var r=await fetch(SUPABASE_URL+"/storage/v1/object/sign/"+PHOTO_BUCKET+"/"+path,{method:"POST",headers:{"apikey":SUPABASE_ANON,"Authorization":HEADERS.Authorization,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:exp||3600})});
   if(!r.ok)return null;var j=await r.json();return j.signedURL?SUPABASE_URL+"/storage/v1"+j.signedURL:null;
 }
 
@@ -1469,9 +1469,21 @@ function DiagnosticsTab(props){
     list.map(function(d){var pr=projects.find(function(p){return p.id===d.project_id;});return React.createElement(DiagnosticCard,{key:d.id,diag:d,project:pr,company:company,author:author,contact:c,net:net,open:open===d.id,onToggle:function(){setOpen(open===d.id?null:d.id);},onSaved:load});}));
 }
 function DiagnosticCard(props){
-  var d=props.diag,net=props.net,company=props.company,author=props.author,locked=d.status==="valide";
+  var d=props.diag,net=props.net,company=props.company,author=props.author,locked=false;
   var [f,setF]=useState(Object.assign({},d,{answers:d.answers||{}})),[busy,setBusy]=useState(false),[m,setM]=useState(null);
   var tpl=DIAG_TEMPLATES.find(function(t){return t.id===d.template_id;});
+  var [mail,setMail]=useState(null),[sending,setSending]=useState(false);
+  async function sendMail(){
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((mail.to||"").trim())){setM("Erreur : adresse e-mail invalide.");return;}
+    setSending(true);setM(null);
+    try{var dd=Object.assign({},d,{answers:f.answers,tech_observations:f.tech_observations,tech_rooms:f.tech_rooms,tech_causes:f.tech_causes,tech_conclusion:f.tech_conclusion,tech_works:f.tech_works});
+      var html=await buildDiagnosticHtml(dd,tpl,props.project,props.contact,company,net,604800);
+      await apiPost("/api/send-diagnostic",{to:mail.to.trim(),toName:contactName(props.contact),subject:mail.subject,message:mail.message,html:html,companyId:company.id,companyName:company.name,diagnosticId:d.id});
+      await logActivity(company,author,d.contact_id,d.project_id,"diagnostic.emailed","Rapport de diagnostic envoyé à "+mail.to.trim(),null);
+      var dest=mail.to.trim();setMail(null);setM("Rapport envoyé à "+dest+".");}
+    catch(e){setM("Erreur : "+e.message);}
+    setSending(false);
+  }
   var [view,setView]=useState(d.status==="valide"?"synth":"form");
   useEffect(function(){setView(d.status==="valide"?"synth":"form");},[d.status]);
   function setAns(k,v){var a=Object.assign({},f.answers);a[k]=v;setF(Object.assign({},f,{answers:a}));}
@@ -1499,7 +1511,8 @@ function DiagnosticCard(props){
     React.createElement("div",{onClick:props.onToggle,style:{display:"flex",justifyContent:"space-between",gap:10,cursor:"pointer",flexWrap:"wrap"}},
       React.createElement("div",null,React.createElement("div",{style:{fontWeight:700,fontSize:15}},(d.label||(tpl?tpl.title:"Diagnostic"))+(d.label&&tpl?" · "+tpl.title:"")),React.createElement("div",{style:{fontSize:12.5,color:"#6b7684"}},"Créé le "+fmtDT(d.created_at)+(d.tech_author?" · "+d.tech_author:""))),
       React.createElement("span",{style:{alignSelf:"flex-start",fontSize:12,fontWeight:600,padding:"3px 12px",borderRadius:999,background:locked?"#E3F6E8":"#FAEEDA",color:locked?"#1E6B35":"#9A5B10"}},locked?"✔ Validé":"Brouillon")),
-    props.open&&React.createElement("div",{style:{display:"flex",gap:6,marginTop:12}},[["form","✏️ Formulaire"],["synth","📄 Synthèse"]].map(function(v){var on=view===v[0];return React.createElement("button",{key:v[0],onClick:function(){setView(v[0]);},style:{padding:"6px 14px",borderRadius:999,border:"1px solid "+(on?net.color:"#e3e8ef"),background:on?net.light:"#fff",color:on?net.color:"#4a5565",fontWeight:on?700:500,fontSize:12.5,cursor:"pointer"}},v[1]);}),React.createElement("button",{onClick:function(){printDiagnostic(Object.assign({},d,{answers:f.answers,tech_observations:f.tech_observations,tech_rooms:f.tech_rooms,tech_causes:f.tech_causes,tech_conclusion:f.tech_conclusion,tech_works:f.tech_works}),tpl,props.project,props.contact,company,net);},style:{marginLeft:"auto",padding:"6px 14px",borderRadius:9,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:12.5,cursor:"pointer"}},"🖨️ Imprimer / PDF du diagnostic")),
+    props.open&&React.createElement("div",{style:{display:"flex",gap:6,marginTop:12}},[["form","✏️ Formulaire"],["synth","📄 Synthèse"]].map(function(v){var on=view===v[0];return React.createElement("button",{key:v[0],onClick:function(){setView(v[0]);},style:{padding:"6px 14px",borderRadius:999,border:"1px solid "+(on?net.color:"#e3e8ef"),background:on?net.light:"#fff",color:on?net.color:"#4a5565",fontWeight:on?700:500,fontSize:12.5,cursor:"pointer"}},v[1]);}),React.createElement("button",{onClick:function(){printDiagnostic(Object.assign({},d,{answers:f.answers,tech_observations:f.tech_observations,tech_rooms:f.tech_rooms,tech_causes:f.tech_causes,tech_conclusion:f.tech_conclusion,tech_works:f.tech_works}),tpl,props.project,props.contact,company,net);},style:{marginLeft:"auto",padding:"6px 14px",borderRadius:9,border:"none",background:net.color,color:"#fff",fontWeight:600,fontSize:12.5,cursor:"pointer"}},"🖨️ Imprimer PDF"),
+      React.createElement("button",{onClick:function(){var cn=((props.contact.civility||"")+" "+contactName(props.contact)).trim();setMail({to:props.contact.email||"",subject:"Rapport de diagnostic"+(d.label?" – "+d.label:"")+" – "+company.name,message:"Bonjour"+(cn?" "+cn:"")+",\n\nVeuillez trouver ci-dessous le rapport de diagnostic réalisé"+(props.project?" pour votre projet « "+props.project.title+" »":"")+".\n\nN'hésitez pas à nous contacter pour toute question.\n\nCordialement,\n"+company.name});setM(null);},style:{padding:"6px 14px",borderRadius:9,border:"1px solid "+net.color,background:"#fff",color:net.color,fontWeight:600,fontSize:12.5,cursor:"pointer"}},"✉️ Envoyer au client")),
     props.open&&view==="synth"&&React.createElement("div",{style:{marginTop:12}},React.createElement(DiagSynthesis,{key:d.updated_at,diag:Object.assign({},d,{answers:f.answers}),tpl:tpl,project:props.project,net:net,company:company})),
     props.open&&view==="form"&&React.createElement("div",{style:{marginTop:14}},
       React.createElement("div",{style:{border:"1px solid "+net.color,borderRadius:12,padding:14,marginBottom:14}},
@@ -1520,11 +1533,18 @@ function DiagnosticCard(props){
         d.ai_suggestion&&!locked&&React.createElement("div",{style:{display:"flex",gap:8,marginTop:8}},
           React.createElement("button",{onClick:function(){save({ai_status:"acceptee"},"Suggestion IA retenue");},style:{padding:"6px 14px",borderRadius:9,border:"none",background:"#2f7d3a",color:"#fff",cursor:"pointer",fontSize:12.5}},"Retenir"),
           React.createElement("button",{onClick:function(){save({ai_status:"rejetee"},"Suggestion IA écartée");},style:{padding:"6px 14px",borderRadius:9,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer",fontSize:12.5}},"Écarter"))),
+      mail&&React.createElement("div",{style:{border:"1px solid "+net.color,borderRadius:12,padding:14,marginBottom:12,background:"#fff"}},
+        React.createElement("div",{style:{fontWeight:700,fontSize:13.5,marginBottom:8}},"Envoyer le rapport au client"),
+        React.createElement("input",{value:mail.to,placeholder:"E-mail du client",onChange:function(e){setMail(Object.assign({},mail,{to:e.target.value}));},style:{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,marginBottom:8}}),
+        React.createElement("input",{value:mail.subject,onChange:function(e){setMail(Object.assign({},mail,{subject:e.target.value}));},style:{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,marginBottom:8}}),
+        React.createElement("textarea",{rows:6,value:mail.message,onChange:function(e){setMail(Object.assign({},mail,{message:e.target.value}));},style:{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:9,border:"1px solid #d9e0ea",fontSize:13.5,fontFamily:"inherit",marginBottom:8}}),
+        React.createElement("div",{style:{fontSize:11.5,color:"#6b7684",marginBottom:8}},"Le rapport complet (avec photos, liens valables 7 jours) est inclus dans le corps de l'e-mail."),
+        React.createElement("div",{style:{display:"flex",gap:8}},React.createElement("button",{onClick:function(){setMail(null);},style:{padding:"8px 14px",borderRadius:9,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"Annuler"),React.createElement("button",{onClick:sendMail,disabled:sending,style:{padding:"8px 18px",borderRadius:9,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:sending?"wait":"pointer"}},sending?"Envoi…":"Envoyer"))),
       m&&React.createElement("div",{style:{fontSize:13,marginBottom:8,color:m.indexOf("Erreur")===0?"#9B2C2C":"#1E6B35"}},m),
       React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
-        !locked&&React.createElement("button",{onClick:function(){save(null);},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid "+net.color,background:"#fff",color:net.color,fontWeight:600,cursor:"pointer"}},"Enregistrer le brouillon"),
-        !locked&&React.createElement("button",{onClick:function(){if(window.confirm("Valider ce diagnostic ? Il sera verrouillé (réouvrable ensuite)."))save({status:"valide",validated_by:author,validated_at:new Date().toISOString()},"Diagnostic validé");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},"✔ Valider"),
-        locked&&React.createElement("button",{onClick:function(){save({status:"brouillon",validated_by:null,validated_at:null},"Diagnostic rouvert pour modification");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"↩ Rouvrir pour modifier"),
+        React.createElement("button",{onClick:function(){save(null);},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid "+net.color,background:"#fff",color:net.color,fontWeight:600,cursor:"pointer"}},"Enregistrer"),
+        d.status!=="valide"&&React.createElement("button",{onClick:function(){if(window.confirm("Marquer ce diagnostic comme validé ?"))save({status:"valide",validated_by:author,validated_at:new Date().toISOString()},"Diagnostic validé");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"none",background:net.color,color:"#fff",fontWeight:600,cursor:"pointer"}},"✔ Valider"),
+        d.status==="valide"&&React.createElement("button",{onClick:function(){save({status:"brouillon",validated_by:null,validated_at:null},"Diagnostic rouvert pour modification");},disabled:busy,style:{padding:"10px 18px",borderRadius:10,border:"1px solid #d9e0ea",background:"#fff",cursor:"pointer"}},"↩ Repasser en brouillon"),
         React.createElement("button",{onClick:del,disabled:busy,style:{padding:"10px 16px",borderRadius:10,border:"1px solid #e9c4c4",background:"#fff",color:"#9B2C2C",fontWeight:600,cursor:"pointer",marginLeft:"auto"}},"🗑️ Supprimer"))));
 }
 
@@ -1591,7 +1611,7 @@ function SettingsPanel(props){
 /* ---- Modèles de diagnostic dynamiques ---- */
 // types : y = Oui/Non/Non vérifié (+commentaire) · n = nombre (unité) · s = liste · t = texte
 var DIAG_TEMPLATES=[
- {id:"mh_humidite",network:"humidite",title:"Diagnostic humidité (MurHumide)",match:["capillair","salp","humid","infiltr","étanch","etanch","ventil","moisis","drain","cuvel"],sections:[
+ {id:"mh_humidite",network:"humidite",title:"Diagnostic humidité",match:["capillair","salp","humid","infiltr","étanch","etanch","ventil","moisis","drain","cuvel"],sections:[
   {id:"sels",title:"Sels, enduits et dégradations",fields:[["sels_apparents","Sels apparents","y"],["remontees_capillaires","Remontées capillaires suspectées","y"],["enduits_contamines","Enduits et plâtres contaminés","y"],["peinture_ecaillee","Peinture écaillée","y"],["delitement_joints","Délitement des joints","y"],["faiencage","Faïençage de la maçonnerie","y"],["ba13_contamine","BA13 contaminé","y"]]},
   {id:"humidite",title:"Humidité et eau",fields:[["presence_humidite","Présence d'humidité","y"],["humidite_min","Humidité mesurée – minimum","n","%"],["humidite_max","Humidité mesurée – maximum","n","%"],["humidite_surfacique","Humidité surfacique","y"],["condensation","Condensation","y"],["penetration_eau","Pénétration d'eau","y"],["infiltration_gravitaire","Infiltration gravitaire / pression hydrostatique","y"],["risque_inondation","Risque d'inondation","y"],["defaut_etancheite","Défaut d'étanchéité","y"],["diff_niveau_sol","Différence de niveau de sol","t"]]},
   {id:"moisissures",title:"Moisissures et ventilation",fields:[["moisissures","Présence de moisissures","y"],["champignons","Présence de champignons","y"],["aspergillus","Présence d'aspergillus","y"],["defaut_ventilation","Défaut de ventilation","y"],["vmc_inoperante","VMC inopérante","y"]]},
@@ -1600,7 +1620,7 @@ var DIAG_TEMPLATES=[
   {id:"depose",title:"Dépose préalable",fields:[["chaudiere","Chaudière à déposer","y"],["radiateurs","Radiateurs à déposer","y"],["ballon","Ballon à déposer","y"],["tableau_elec","Tableau électrique à déposer","y"]]},
   {id:"ampleur",title:"Ampleur du traitement",fields:[["type_traitement","Type de traitement","s",["Traitement complet","Traitement partiel"]]]}
  ]},
- {id:"at_toiture",network:"renovation",title:"Diagnostic toiture / façade (Atriome)",match:["toiture","tuile","façade","facade","ravalement","combles","isolation"],sections:[
+ {id:"at_toiture",network:"renovation",title:"Diagnostic toiture / façade",match:["toiture","tuile","façade","facade","ravalement","combles","isolation"],sections:[
   {id:"couverture",title:"Couverture",fields:[["tuiles_cassees","Tuiles cassées ou déplacées","y"],["mousses","Mousses / lichens","y"],["faitage","Faîtage et rives dégradés","y"],["gouttieres","Gouttières / descentes défectueuses","y"],["fuites","Fuites ou traces d'infiltration","y"],["surface","Surface estimée","n","m²"],["pente","Pente","n","%"]]},
   {id:"charpente",title:"Charpente et isolation",fields:[["charpente","Charpente dégradée","y"],["xylophages","Présence éventuelle de xylophages","y"],["isolation","État de l'isolation sous toiture","s",["Absente","Dégradée","Correcte","Non vérifiée"]]]},
   {id:"facade",title:"Façade",fields:[["fissures","Fissures visibles","y"],["enduit","Enduit dégradé","y"],["salissures","Salissures / végétation","y"]]}
@@ -1665,13 +1685,12 @@ function DiagSynthesis(props){
   var th={fontSize:13,padding:"6px 8px",borderBottom:"1px solid #eef1f6",verticalAlign:"top"};
   return React.createElement("div",null,
     React.createElement("div",{ref:ref},
-      React.createElement("h2",{style:{margin:"0 0 4px",fontSize:18}},"Synthèse — "+(d.label||(tpl?tpl.title:"Diagnostic"))),
+      React.createElement("div",{style:{margin:"0 0 4px",fontSize:15,fontWeight:700}},"Synthèse — "+(d.label||(tpl?tpl.title:"Diagnostic"))),
       React.createElement("div",{style:{fontSize:12.5,color:"#6b7684",marginBottom:12}},[(tpl?tpl.title:""),(props.project?"Projet : "+props.project.title+(props.project.reference?" ("+props.project.reference+")":""):""),"Créé le "+fmtDT(d.created_at),d.tech_author?"Technicien : "+d.tech_author:"",d.status==="valide"?"✔ Validé le "+fmtDT(d.validated_at)+(d.validated_by?" par "+d.validated_by:""):"Brouillon (non validé)"].filter(Boolean).join(" · ")),
       blocks.every(function(b){return b.rows.length===0;})&&React.createElement("div",{style:{color:"#9aa4b2",fontSize:13,marginBottom:12}},"Aucune réponse saisie dans le formulaire."),
-      alerts.length>0&&React.createElement("div",{style:{background:"#FDECEC",border:"1px solid #f0c4c4",borderRadius:12,padding:"10px 14px",marginBottom:14}},React.createElement("div",{style:{fontWeight:700,color:"#9B2C2C",marginBottom:4,fontSize:13.5}},"Points relevés (réponse « Oui »)"),React.createElement("div",{style:{fontSize:13.5}},alerts.map(function(a,i){return React.createElement("div",{key:i},"• "+a);}))),
       blocks.filter(function(b){return b.rows.length>0;}).map(function(b){return React.createElement("div",{key:b.sec.id,style:{marginBottom:14}},
         React.createElement("h3",{style:{fontSize:14.5,margin:"0 0 4px",color:net.color}},b.sec.title),
-        b.rows.length?React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},React.createElement("tbody",null,b.rows.map(function(r,i){return React.createElement("tr",{key:i},React.createElement("td",{style:Object.assign({},th,{width:"48%",color:"#4a5565"})},r.label),React.createElement("td",{style:th},React.createElement("b",{style:{color:r.v==="Oui"&&r.type==="y"?"#B03A3A":r.v==="Non"?"#1E6B35":r.v==="Non vérifié"?"#6b7684":"#12263f"}},r.val),r.c?React.createElement("div",{style:{fontSize:12.5,color:"#4a5565",marginTop:2}},"💬 "+r.c):null));}))):React.createElement("div",{style:{fontSize:12.5,color:"#9aa4b2"}},"Aucune donnée saisie."),
+        b.rows.length?React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},React.createElement("tbody",null,b.rows.map(function(r,i){return React.createElement("tr",{key:i},React.createElement("td",{style:Object.assign({},th,{width:"48%",color:"#4a5565"})},r.label),React.createElement("td",{style:th},React.createElement("b",{style:{color:r.v==="Oui"&&r.type==="y"?"#B03A3A":r.v==="Non"?"#1E6B35":r.v==="Non vérifié"?"#6b7684":"#12263f"}},r.val),r.c?React.createElement("div",{style:{fontSize:12.5,color:"#4a5565",marginTop:2}},r.c):null));}))):React.createElement("div",{style:{fontSize:12.5,color:"#9aa4b2"}},"Aucune donnée saisie."),
         b.missing>0&&b.rows.length>0&&React.createElement("div",{style:{fontSize:11.5,color:"#9aa4b2",marginTop:3}},b.missing+" champ"+(b.missing>1?"s":"")+" non renseigné"+(b.missing>1?"s":"")),
         (photos||[]).filter(function(p){return p.moment==="diag:"+b.sec.id;}).length>0&&React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}},(photos||[]).filter(function(p){return p.moment==="diag:"+b.sec.id;}).map(function(p){return urls[p.id]?React.createElement("div",{key:p.id},React.createElement("img",{src:urls[p.id],style:{width:150,height:110,objectFit:"cover",borderRadius:8}}),p.caption&&React.createElement("div",{style:{fontSize:11,color:"#6b7684"}},p.caption)):null;})));}),
       tech.length>0&&React.createElement("div",{style:{marginBottom:14}},React.createElement("h3",{style:{fontSize:14.5,margin:"0 0 4px",color:net.color}},"Synthèse du technicien"),tech.map(function(t){return React.createElement("div",{key:t[0],style:{marginBottom:8}},React.createElement("div",{style:{fontSize:11.5,color:"#6b7684",textTransform:"uppercase"}},t[1]),React.createElement("div",{style:{fontSize:13.5,whiteSpace:"pre-wrap"}},d[t[0]]));})),
@@ -1680,11 +1699,9 @@ function DiagSynthesis(props){
 }
 
 function escH(v){return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-async function printDiagnostic(d,tpl,project,contact,company,net){
-  var w=window.open("","_blank");if(!w){alert("Autorisez l'ouverture de fenêtres pour imprimer.");return;}
-  w.document.write("<p style='font-family:Arial;padding:30px'>Préparation du document…</p>");
+async function buildDiagnosticHtml(d,tpl,project,contact,company,net,expSec){
   var photos=[];try{photos=await dbSelect("project_photos","diagnostic_id=eq."+d.id+"&order=created_at.asc");}catch(e){}
-  var urls={};await Promise.all(photos.map(async function(p){urls[p.id]=await signedUrl(p.path);}));
+  var urls={};await Promise.all(photos.map(async function(p){urls[p.id]=await signedUrl(p.path,expSec);}));
   var ans=d.answers||{},col=net.color;
   function photosHtml(mom){var l=photos.filter(function(p){return mom.indexOf(p.moment)>=0&&urls[p.id];});if(!l.length)return "";return "<div class='ph'>"+l.map(function(p){return "<figure><img src='"+urls[p.id]+"'/>"+(p.caption?"<figcaption>"+escH(p.caption)+"</figcaption>":"")+"</figure>";}).join("")+"</div>";}
   var secs=(tpl?tpl.sections:[]).map(function(sec){
@@ -1702,6 +1719,12 @@ async function printDiagnostic(d,tpl,project,contact,company,net){
   +"<div><b>Technicien : </b>"+escH(d.tech_author||"")+"</div><div><b>Statut : </b>"+(d.status==="valide"?"Validé le "+escH(fmtDT(d.validated_at)):"Brouillon")+"</div></div>"
   +secs+"<h3>Synthèse du technicien</h3>"+tech+photosHtml(["diag:general","diagnostic"])+ai
   +"<div class='sig'><div>Technicien (nom, date, signature)</div><div>Client (« lu et pris connaissance »)</div></div></body></html>";
+  return html;
+}
+async function printDiagnostic(d,tpl,project,contact,company,net){
+  var w=window.open("","_blank");if(!w){alert("Autorisez l'ouverture de fenêtres pour imprimer.");return;}
+  w.document.write("<p style='font-family:Arial;padding:30px'>Préparation du document…</p>");
+  var html=await buildDiagnosticHtml(d,tpl,project,contact,company,net,3600);
   w.document.open();w.document.write(html);w.document.close();
   var imgs=Array.prototype.slice.call(w.document.images),pending=imgs.length,done=false;
   function go(){if(done)return;done=true;w.focus();w.print();}
